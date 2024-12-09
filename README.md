@@ -3,4 +3,4 @@ A solver for the Theory of Uninterpreted Functions
 
 Group: 
 - Sarah Azevedo Pereira
-- Wesley
+- Wesley Marques Daniel Chaves 
