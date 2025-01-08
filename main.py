@@ -1,23 +1,40 @@
 from pysmt.shortcuts import Symbol
 from pysmt.smtlib.parser import SmtLibParser
 from graphviz import Digraph
+from pysat.solvers import Solver
 import os
 
 # defines a symbol, that can be a constant (is_function = False) or a function (is_function = True) 
-# examples of Symbol object -----> name = or, is_function = yes
+# example of Symbol -----> name = or, is_function = yes
 class Symbol:
   def __init__(self, name, is_function):
     self.name = name
     self.is_function = is_function
+  
+  def __eq__(self, other):
+    if not isinstance(other, Symbol):
+      return False
+    return self.name == other.name and self.is_function == other.is_function
+  
+  def __hash__(self):
+    return hash((self.name, self.is_function))
 
 # defines an arbitrary expression, following the syntax specified in the documentation
 # op is a symbol, that can contain args (if it is a function)
-# example of Expr object -----> op = or, args = [(b and c), (e)] -> (b and c) or e 
-# in the example above, all the args are also Expr objects
+# example of Expr -----> op = or, args = [(b and c), (e)] -> (b and c) or e 
+# in the example above, all the args are also Expr
 class Expr:
   def __init__(self, op, *args):
     self.op = op
     self.args = args
+
+  def __eq__(self, other):
+    if not isinstance(other, Expr):
+      return False
+    return self.op == other.op and self.args == other.args
+  
+  def __hash__(self):
+    return hash((self.op, self.args))
 
   # converting from arbitrary expression to negation normal form (NNF)
   def to_nnf(self):
@@ -29,9 +46,9 @@ class Expr:
         # not (not x) = x
         return neg_expr.args[0].to_nnf()
       
-      elif neg_expr.op.name == 'equal':
-        # not (a equal b) = a not equal b
-        return Expr(Symbol('not equal', True), *(arg.to_nnf() for arg in neg_expr.args))
+      # elif neg_expr.op.name == 'equal':
+      #   # not (a equal b) = a not equal b
+      #   return Expr(Symbol('not equal', True), *(arg.to_nnf() for arg in neg_expr.args))
       
       elif neg_expr.op.name == 'and':
         # not (a and b) = not a or not b
@@ -89,10 +106,10 @@ class Expr:
       right = self.args[1].to_cnf()
       return Expr(Symbol('equal', True), left, right)
 
-    elif self.op.name == 'not equal':
-      left = self.args[0].to_cnf()
-      right = self.args[1].to_cnf()
-      return Expr(Symbol('not equal', True), left, right)
+    # elif self.op.name == 'not equal':
+    #   left = self.args[0].to_cnf()
+    #   right = self.args[1].to_cnf()
+    #   return Expr(Symbol('not equal', True), left, right)
 
     elif self.op.name == 'and':
       left = self.args[0].to_cnf()
@@ -202,6 +219,27 @@ def get_clause_set(expr):
   extract_clauses(expr)
   return clause_set
 
+def my_fun(clause_set):
+  my_vec = []
+  my_map = {}
+
+  for clause in clause_set:
+    converted_to_int = []
+    for s in clause:
+      if s in my_map:
+        converted_to_int.append(my_map[s])
+      elif s.op.name == "not" and s.args[0] in my_map:
+        converted_to_int.append(-1 * my_map[s.args[0]])
+      elif s.op.name == "not":
+        my_map[s.args[0]] = len(my_map) + 1
+        converted_to_int.append(-1 * my_map[s.args[0]])
+      else:
+        my_map[s] = len(my_map) + 1
+        converted_to_int.append(my_map[s])
+    my_vec.append(converted_to_int)
+
+  return my_vec, my_map
+
 # main
 parser = SmtLibParser() 
 script = parser.get_script_fname("testCase05.smt2")
@@ -217,15 +255,31 @@ cnf_expr.to_tree('cnf_tree')
 
 clause_set = get_clause_set(cnf_expr)
 
-print('\n')
-print(f"original formula: {formula}")
-print(f"intermediate formula: {expr}")
-print('\n')
-print(f"NNF formula: {nnf_expr}")
-print(f"CNF formula: {cnf_expr}")
+# print('\n')
+# print(f"original formula: {formula}")
+# print(f"intermediate formula: {expr}")
+# print('\n')
+# print(f"NNF formula: {nnf_expr}")
+# print(f"CNF formula: {cnf_expr}")
 print('\n')
 print(f'Clause Set: {clause_set}')
 print('\n')
 
-# tarefas
-# 1) modificar to_nnf e to_cnf para utilizar iteração ao invés de recursão
+abstraction, my_map = my_fun(clause_set)
+
+print(f'Abstraction: {abstraction}')
+print('\n')
+print(f'Mapping: {my_map}')
+print('\n')
+
+solver = Solver(name='g3')  # Use the default SAT solver (Glucose3 here)
+for i in abstraction:
+  solver.add_clause(i)
+
+if solver.solve():
+  print("SATISFIABLE")
+  print("Solution:", solver.get_model())  # Get a satisfying assignment (or not)
+else:
+  print("UNSATISFIABLE")
+
+print('\n')
