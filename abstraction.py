@@ -39,8 +39,10 @@ def main():
     
 
     # Add clauses
-    solver.add_clause(result[0])
-    solver.add_clause(result[1]) 
+    for i in result:
+        solver.add_clause(i)
+    # solver.add_clause(result[0])
+    # solver.add_clause(result[1]) 
 
     # Check if the formula is satisfiable
     if solver.solve():
