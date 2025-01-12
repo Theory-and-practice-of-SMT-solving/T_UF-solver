@@ -2,6 +2,7 @@ from pysmt.shortcuts import Symbol
 from pysmt.smtlib.parser import SmtLibParser
 from graphviz import Digraph
 from pysat.solvers import Solver
+from collections import defaultdict
 import os
 
 # defines a symbol, that can be a constant (is_function = False) or a function (is_function = True) 
@@ -242,7 +243,7 @@ def my_fun(clause_set):
 
 # main
 parser = SmtLibParser() 
-script = parser.get_script_fname("testCase05.smt2")
+script = parser.get_script_fname("testCase01.smt2")
 
 formula = script.get_last_formula() 
 expr = convert_to_expr(formula) 
@@ -264,6 +265,75 @@ clause_set = get_clause_set(cnf_expr)
 print('\n')
 print(f'Clause Set: {clause_set}')
 print('\n')
+
+def trim_all(s):
+  return ''.join(s.split())
+
+
+
+relation_graph = defaultdict(list)
+restriction_graph = defaultdict(list)
+num_clauses = 0
+
+def eq_clause (s) : 
+  result = []
+  openpar = 0  # Para contar os parênteses abertos
+  closedpar = 0
+  start = 0
+  s_copy = str(s[::-1])
+  
+  if s_copy[0] == ')':
+    for k, char in enumerate(s_copy):
+      if char == '(':
+        openpar += 1
+      elif char == ')':
+        closedpar += 1
+      start = start + 1
+      if openpar == closedpar and openpar != 0: 
+        break
+    for k, char in enumerate(s_copy[start:]):
+      if char == ',':
+        break
+      start = start + 1
+  else:
+    for k, char in enumerate(s_copy):
+      if char == ',':
+        break
+      start = start + 1
+     
+  # Quando o balanceamento chegar a 0, a substring está completa
+  result.append(s[:len(s) - 1 - start])  # Adiciona a substring balanceada
+  result.append(s[len(s) - start:])
+  return result
+
+
+for k in clause_set:
+  for j in k: 
+    clause = trim_all(str(j))
+    print(clause)
+
+    if clause[:3].lower() == 'not': # verifica se a cláusula vai estar ou não no grafo de restrições
+      clause = (clause[4:])[:-1]
+      if 'equal' == clause[:5]:
+        clause = (clause[6:])[:-1] # conta os dígitos da palavra equal
+        restriction = eq_clause(clause)
+        print(restriction)
+        key = (restriction[0], num_clauses) # adiciona a chave como sendo parte da igualdade em si com o label da clause q está
+        restriction_graph[key].append(restriction[1])
+      else:
+        key = (clause, num_clauses)
+        restriction_graph[key].append("")
+    else:
+      if "equal" == clause[:5] :
+        clause = (clause[6:])[:-1]
+        equiv = eq_clause(clause)
+        print(equiv)
+        key = (equiv[0], num_clauses)
+        relation_graph[key].append(equiv[1])
+      else:
+        key = (clause, num_clauses)
+        relation_graph[key].append("")
+  num_clauses = num_clauses + 1
 
 abstraction, my_map = my_fun(clause_set)
 
