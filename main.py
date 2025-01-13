@@ -21,7 +21,7 @@ class Symbol:
 
 # defines an arbitrary expression, following the syntax specified in the documentation
 # op is a symbol, that can contain args (if it is a function)
-# example of Expr -----> op = or, args = [(b and c), (e)] -> (b and c) or e 
+# example of Expr -----> op = or, args = (b and c), (e) -> (b and c) or e 
 # in the example above, all the args are also Expr
 class Expr:
   def __init__(self, op, *args):
@@ -174,9 +174,9 @@ def convert_to_expr(formula):
     # making 'and' have only two arguments
     args = [convert_to_expr(arg) for arg in formula.args()]
     while len(args) > 2:
-        a = args.pop(0)
-        b = args.pop(0)
-        args.insert(0, Expr(Symbol('and', True), a, b))
+      a = args.pop(0)
+      b = args.pop(0)
+      args.insert(0, Expr(Symbol('and', True), a, b))
     return Expr(Symbol('and', True), *args)
   
   elif formula.is_or():

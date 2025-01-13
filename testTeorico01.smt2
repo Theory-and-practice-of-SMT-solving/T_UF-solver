@@ -9,4 +9,4 @@
 (declare-fun g () Bool)
 
 ; !(a => b) & ((c | d) => !e)
-(assert (and a b c d))
+(assert (not e))
