@@ -22,7 +22,7 @@ class Symbol:
 
 # defines an arbitrary expression, following the syntax specified in the documentation
 # op is a symbol, that can contain args (if it is a function)
-# example of Expr -----> op = or, args = [(b and c), (e)] -> (b and c) or e 
+# example of Expr -----> op = or, args = (b and c), (e) -> (b and c) or e 
 # in the example above, all the args are also Expr
 class Expr:
   def __init__(self, op, *args):
@@ -175,9 +175,9 @@ def convert_to_expr(formula):
     # making 'and' have only two arguments
     args = [convert_to_expr(arg) for arg in formula.args()]
     while len(args) > 2:
-        a = args.pop(0)
-        b = args.pop(0)
-        args.insert(0, Expr(Symbol('and', True), a, b))
+      a = args.pop(0)
+      b = args.pop(0)
+      args.insert(0, Expr(Symbol('and', True), a, b))
     return Expr(Symbol('and', True), *args)
   
   elif formula.is_or():
@@ -220,8 +220,8 @@ def get_clause_set(expr):
   extract_clauses(expr)
   return clause_set
 
-def my_fun(clause_set):
-  my_vec = []
+def create_abstraction(clause_set):
+  abstract_clause = []
   my_map = {}
 
   for clause in clause_set:
@@ -237,119 +237,102 @@ def my_fun(clause_set):
       else:
         my_map[s] = len(my_map) + 1
         converted_to_int.append(my_map[s])
-    my_vec.append(converted_to_int)
+    abstract_clause.append(converted_to_int)
 
-  return my_vec, my_map
+  return abstract_clause, my_map
 
-# main
-parser = SmtLibParser() 
-script = parser.get_script_fname("testCase01.smt2")
+def create_graphs(clause_set):
+  relation_graph = defaultdict(list)
+  restriction_graph = defaultdict(list)
+  clause_index = 0
 
-formula = script.get_last_formula() 
-expr = convert_to_expr(formula) 
+  for clause in clause_set:
+    for term in clause: 
 
-nnf_expr = expr.to_nnf() 
-nnf_expr.to_tree('nnf_tree')
+      if term.op.name == 'not': # verifica se o termo vai estar ou não no grafo de restrições
+        neg_arg = term.args[0] # not possui apenas 1 argumento
+        
+        if neg_arg.op.name == 'equal':
+          restriction = [x for x in neg_arg.args] # cria uma lista com os argumentos
+          key = (restriction[0], clause_index) # adiciona a chave como sendo parte da igualdade em si com o index da clause q está
+          restriction_graph[key].append(restriction[1])
+        else: 
+          key = (term, clause_index)
+          restriction_graph[key].append("")
+      else:
+        if term.op.name == "equal":
+          equiv = [x for x in term.args] # cria uma lista com os argumentos
+          key = (equiv[0], clause_index) # adiciona a chave como sendo parte da igualdade em si com o index da clause q está
+          relation_graph[key].append(equiv[1])
+        else: 
+          key = (term, clause_index)
+          relation_graph[key].append("")
 
-cnf_expr = nnf_expr.to_cnf() 
-cnf_expr.to_tree('cnf_tree')
-
-clause_set = get_clause_set(cnf_expr)
-
-# print('\n')
-# print(f"original formula: {formula}")
-# print(f"intermediate formula: {expr}")
-# print('\n')
-# print(f"NNF formula: {nnf_expr}")
-# print(f"CNF formula: {cnf_expr}")
-print('\n')
-print(f'Clause Set: {clause_set}')
-print('\n')
-
-def trim_all(s):
-  return ''.join(s.split())
-
-
-
-relation_graph = defaultdict(list)
-restriction_graph = defaultdict(list)
-num_clauses = 0
-
-def eq_clause (s) : 
-  result = []
-  openpar = 0  # Para contar os parênteses abertos
-  closedpar = 0
-  start = 0
-  s_copy = str(s[::-1])
+    clause_index = clause_index + 1
   
-  if s_copy[0] == ')':
-    for k, char in enumerate(s_copy):
-      if char == '(':
-        openpar += 1
-      elif char == ')':
-        closedpar += 1
-      start = start + 1
-      if openpar == closedpar and openpar != 0: 
-        break
-    for k, char in enumerate(s_copy[start:]):
-      if char == ',':
-        break
-      start = start + 1
-  else:
-    for k, char in enumerate(s_copy):
-      if char == ',':
-        break
-      start = start + 1
-     
-  # Quando o balanceamento chegar a 0, a substring está completa
-  result.append(s[:len(s) - 1 - start])  # Adiciona a substring balanceada
-  result.append(s[len(s) - start:])
-  return result
+  return relation_graph, restriction_graph
 
+######################################## MAIN ########################################
 
-for k in clause_set:
-  for j in k: 
-    clause = trim_all(str(j))
-    print(clause)
+def main():
+  # main
+  parser = SmtLibParser() 
+  script = parser.get_script_fname("testCase01.smt2")
 
-    if clause[:3].lower() == 'not': # verifica se a cláusula vai estar ou não no grafo de restrições
-      clause = (clause[4:])[:-1]
-      if 'equal' == clause[:5]:
-        clause = (clause[6:])[:-1] # conta os dígitos da palavra equal
-        restriction = eq_clause(clause)
-        print(restriction)
-        key = (restriction[0], num_clauses) # adiciona a chave como sendo parte da igualdade em si com o label da clause q está
-        restriction_graph[key].append(restriction[1])
-      else:
-        key = (clause, num_clauses)
-        restriction_graph[key].append("")
-    else:
-      if "equal" == clause[:5] :
-        clause = (clause[6:])[:-1]
-        equiv = eq_clause(clause)
-        print(equiv)
-        key = (equiv[0], num_clauses)
-        relation_graph[key].append(equiv[1])
-      else:
-        key = (clause, num_clauses)
-        relation_graph[key].append("")
-  num_clauses = num_clauses + 1
+  formula = script.get_last_formula() 
+  expr = convert_to_expr(formula) 
 
-abstraction, my_map = my_fun(clause_set)
+  nnf_expr = expr.to_nnf() 
+  nnf_expr.to_tree('nnf_tree')
 
-print(f'Abstraction: {abstraction}')
-print('\n')
-print(f'Mapping: {my_map}')
-print('\n')
+  cnf_expr = nnf_expr.to_cnf() 
+  cnf_expr.to_tree('cnf_tree')
 
-solver = Solver(name='g3')  # Use the default SAT solver (Glucose3 here)
-for i in abstraction:
-  solver.add_clause(i)
+  clause_set = get_clause_set(cnf_expr)
 
-if solver.solve():
-  print("SATISFIABLE")
-  print("Solution:", solver.get_model())  # Get a satisfying assignment (or not)
-else:
-  print("UNSATISFIABLE")
+  # print('\n')
+  # print(f"original formula: {formula}")
+  # print(f"intermediate formula: {expr}")
+  # print('\n')
+  # print(f"NNF formula: {nnf_expr}")
+  # print(f"CNF formula: {cnf_expr}")
+  # print('\n')
+  # print(f'Clause Set: {clause_set}')
+  # print('\n')
 
-print('\n')
+  relation_graph, restriction_graph = create_graphs(clause_set)
+  abstract_clause, my_map = create_abstraction(clause_set)
+
+  print('\n')
+  print("CLAUSE SET")
+  print(clause_set)
+  print('\n')
+  print("ABSTRACT CLAUSE")
+  print(abstract_clause)
+  print("\n")
+  print(f"RELATION")
+  print(relation_graph)
+  print("\n")
+  print(f"RESTRICTION")
+  print(restriction_graph)
+  print('\n')
+
+  # print(f'Abstraction: {abstraction}')
+  # print('\n')
+  # print(f'Mapping: {my_map}')
+  # print('\n')
+
+  # solver = Solver(name='g3')  # Use the default SAT solver (Glucose3 here)
+  # for i in abstraction:
+  #   solver.add_clause(i)
+
+  # if solver.solve():
+  #   print("SATISFIABLE")
+  #   print("Solution:", solver.get_model())  # Get a satisfying assignment (or not)
+  # else:
+  #   print("UNSATISFIABLE")
+
+  # print('\n')
+
+if __name__ == "__main__":
+  main()
