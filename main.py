@@ -2,6 +2,7 @@ from pysmt.shortcuts import Symbol
 from pysmt.smtlib.parser import SmtLibParser
 from graphviz import Digraph
 from pysat.solvers import Solver
+from collections import defaultdict
 import os
 
 # defines a symbol, that can be a constant (is_function = False) or a function (is_function = True) 
@@ -219,68 +220,119 @@ def get_clause_set(expr):
   extract_clauses(expr)
   return clause_set
 
-def rest_of(s, pos):
-    return s[pos:]
+def create_abstraction(clause_set):
+  abstract_clause = []
+  my_map = {}
 
-def my_fun(clause_set):
-    my_vec = []
-    my_map = {}
+  for clause in clause_set:
+    converted_to_int = []
+    for s in clause:
+      if s in my_map:
+        converted_to_int.append(my_map[s])
+      elif s.op.name == "not" and s.args[0] in my_map:
+        converted_to_int.append(-1 * my_map[s.args[0]])
+      elif s.op.name == "not":
+        my_map[s.args[0]] = len(my_map) + 1
+        converted_to_int.append(-1 * my_map[s.args[0]])
+      else:
+        my_map[s] = len(my_map) + 1
+        converted_to_int.append(my_map[s])
+    abstract_clause.append(converted_to_int)
 
-    for clause in clause_set:
-      converted_to_int = []
-      for s in clause:
-        if s in my_map:
-          converted_to_int.append(my_map[s])
-        elif s.op.name == "not" and s.args[0] in my_map:
-          converted_to_int.append(-1 * my_map[s.args[0]])
-        elif s.op.name == "not":
-          my_map[s.args[0]] = len(my_map) + 1
-          converted_to_int.append(-1 * my_map[s.args[0]])
-        else:
-          my_map[s] = len(my_map) + 1
-          converted_to_int.append(my_map[s])
-      my_vec.append(converted_to_int)
+  return abstract_clause, my_map
 
-    return my_vec, my_map
+def create_graphs(clause_set):
+  relation_graph = defaultdict(list)
+  restriction_graph = defaultdict(list)
+  clause_index = 0
 
-# main
-parser = SmtLibParser() 
-script = parser.get_script_fname("testCase05.smt2")
+  for clause in clause_set:
+    for term in clause: 
 
-formula = script.get_last_formula() 
-expr = convert_to_expr(formula) 
+      if term.op.name == 'not': # verifica se o termo vai estar ou não no grafo de restrições
+        neg_arg = term.args[0] # not possui apenas 1 argumento
+        
+        if neg_arg.op.name == 'equal':
+          restriction = [x for x in neg_arg.args] # cria uma lista com os argumentos
+          key = (restriction[0], clause_index) # adiciona a chave como sendo parte da igualdade em si com o index da clause q está
+          restriction_graph[key].append(restriction[1])
+        else: 
+          key = (term, clause_index)
+          restriction_graph[key].append("")
+      else:
+        if term.op.name == "equal":
+          equiv = [x for x in term.args] # cria uma lista com os argumentos
+          key = (equiv[0], clause_index) # adiciona a chave como sendo parte da igualdade em si com o index da clause q está
+          relation_graph[key].append(equiv[1])
+        else: 
+          key = (term, clause_index)
+          relation_graph[key].append("")
 
-nnf_expr = expr.to_nnf() 
-nnf_expr.to_tree('nnf_tree')
+    clause_index = clause_index + 1
+  
+  return relation_graph, restriction_graph
 
-cnf_expr = nnf_expr.to_cnf() 
-cnf_expr.to_tree('cnf_tree')
+######################################## MAIN ########################################
 
-clause_set = get_clause_set(cnf_expr)
+def main():
+  # main
+  parser = SmtLibParser() 
+  script = parser.get_script_fname("testCase01.smt2")
 
-# print('\n')
-# print(f"original formula: {formula}")
-# print(f"intermediate formula: {expr}")
-# print('\n')
-# print(f"NNF formula: {nnf_expr}")
-# print(f"CNF formula: {cnf_expr}")
-print('\n')
-print(f'Clause Set: {clause_set}')
-print('\n')
+  formula = script.get_last_formula() 
+  expr = convert_to_expr(formula) 
 
+  nnf_expr = expr.to_nnf() 
+  nnf_expr.to_tree('nnf_tree')
 
-abstraction, my_map = my_fun(clause_set)
-print(abstraction)
-print('\n')
-print(my_map)
-print('\n')
+  cnf_expr = nnf_expr.to_cnf() 
+  cnf_expr.to_tree('cnf_tree')
 
-solver = Solver(name='g3')  # Use the default SAT solver (Glucose3 here)
-for i in abstraction:
-  solver.add_clause(i)
+  clause_set = get_clause_set(cnf_expr)
 
-if solver.solve():
-  print("SATISFIABLE")
-  print("Solution:", solver.get_model())  # Get a satisfying assignment (or not)
-else:
-  print("UNSATISFIABLE")
+  # print('\n')
+  # print(f"original formula: {formula}")
+  # print(f"intermediate formula: {expr}")
+  # print('\n')
+  # print(f"NNF formula: {nnf_expr}")
+  # print(f"CNF formula: {cnf_expr}")
+  # print('\n')
+  # print(f'Clause Set: {clause_set}')
+  # print('\n')
+
+  relation_graph, restriction_graph = create_graphs(clause_set)
+  abstract_clause, my_map = create_abstraction(clause_set)
+
+  print('\n')
+  print("CLAUSE SET")
+  print(clause_set)
+  print('\n')
+  print("ABSTRACT CLAUSE")
+  print(abstract_clause)
+  print("\n")
+  print(f"RELATION")
+  print(relation_graph)
+  print("\n")
+  print(f"RESTRICTION")
+  print(restriction_graph)
+  print('\n')
+
+  # print(f'Abstraction: {abstraction}')
+  # print('\n')
+  # print(f'Mapping: {my_map}')
+  # print('\n')
+
+  # solver = Solver(name='g3')  # Use the default SAT solver (Glucose3 here)
+  # for i in abstraction:
+  #   solver.add_clause(i)
+
+  # if solver.solve():
+  #   print("SATISFIABLE")
+  #   print("Solution:", solver.get_model())  # Get a satisfying assignment (or not)
+  # else:
+  #   print("UNSATISFIABLE")
+
+  # print('\n')
+
+if __name__ == "__main__":
+  main()
