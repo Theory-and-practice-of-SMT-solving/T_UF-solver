@@ -157,20 +157,21 @@ class Expr:
         tree.node(leaf_id, label=str(arg))
         tree.edge(node_id, leaf_id)
 
-class UnionFind:
-    def __init__(self):
-        
-        self.parent = {}
-        self.rank = {}
-
-    def find(self, element):
+class CongruenceClosure:
+  def __init__(self, graph, labels):
+      self.graph = graph  # Adjacency list representation of the graph {v: [successors]}
+      self.labels = labels  # Labels of the vertices {v: label}
+      self.parent = {v: v for v in graph}  # Disjoint-set parent
+      self.rank = {v: 0 for v in graph}  # Rank for union by rank
+  
+  def find(self, element):
         
         if self.parent[element] != element:
             # path compression: recursively set the parent to the representative
             self.parent[element] = self.find(self.parent[element])
         return self.parent[element]
 
-    def union(self, element1, element2):
+  def union(self, element1, element2):
         root1 = self.find(element1)
         root2 = self.find(element2)
 
@@ -185,16 +186,49 @@ class UnionFind:
                 self.parent[root2] = root1
                 self.rank[root1] += 1
 
-    def add(self, element):
+  def add(self, element):
  
         if element not in self.parent:
             self.parent[element] = element
             self.rank[element] = 0
 
-    def connected(self, element1, element2):
-        
+  def connected(self, element1, element2):        
         # vê se estão no mesmo set
         return self.find(element1) == self.find(element2)
+  
+  def congruent(self, u, v):
+      """Check if two vertices are congruent under the current relation."""
+      if self.labels[u] != self.labels[v] or len(self.graph[u]) != len(self.graph[v]):
+        return False
+        
+      for i in range(len(self.graph[u])):
+        if self.find(self.graph[u][i]) != self.find(self.graph[v][i]):
+          return False
+
+      return True
+
+  def merge(self, u, v):
+    """Merge the equivalence classes of u and v, updating the congruence closure."""
+    if self.find(u) == self.find(v):
+      return
+
+    predecessors_u = {x for x in self.graph if u in self.graph[x]}
+    predecessors_v = {x for x in self.graph if v in self.graph[x]}
+
+    self.union(u, v)
+
+    for x in predecessors_u:
+      for y in predecessors_v:
+        if self.find(x) != self.find(y) and self.congruent(x, y):
+          self.merge(x, y)
+  def is_sat(self, constraints):
+    """Check if a set of constraints is satisfiable."""
+    for u, v in constraints:
+      if self.congruent(u, v):
+        return False
+    return True
+
+####################################################################################
 
 # converting the formula given by pySMT parser to Expr
 def convert_to_expr(formula): 
@@ -281,13 +315,13 @@ def create_abstraction(clause_set):
         converted_to_int.append(my_map[s])
     abstract_clause.append(converted_to_int)
 
-  return abstract_clause, my_map, another_map
+  return abstract_clause, another_map
 
-uf_general = UnionFind()
 def create_graphs(clause):
   relation_graph = defaultdict(list)
-  restriction_graph = defaultdict(list)
-
+  constraints = []
+  relation = []
+  labels = {}
   for term in clause: 
     if term.op.name == 'not': # verifica se o termo vai estar ou não no grafo de restrições
       neg_arg = term.args[0] # not possui apenas 1 argumento
@@ -295,26 +329,28 @@ def create_graphs(clause):
       if neg_arg.op.name == 'equal':
         restriction = [x for x in neg_arg.args] # cria uma lista com os argumentos
         key = (restriction[0]) # adiciona a chave como sendo parte da igualdade em si com o index da clause q está
-        uf_general.add(restriction[0])
-        uf_general.add(restriction[1])
-        uf_general.union(restriction[0],restriction[1])
-        restriction_graph[key].append(restriction[1])
+        constraints.append((key, restriction[1]))
+        labels[key] = key
+        labels[restriction[1]] = restriction[1]
       else: 
         key = (term)
-        restriction_graph[key].append("")
+        labels[key] = key
+        constraints.append((key,key))
     else:
       if term.op.name == "equal":
         equiv = [x for x in term.args] # cria uma lista com os argumentos
         key = (equiv[0]) # adiciona a chave como sendo parte da igualdade em si com o index da clause q está
-        uf_general.add(equiv[0])
-        uf_general.add(equiv[1])
-        uf_general.union(equiv[0],equiv[1])
         relation_graph[key].append(equiv[1])
+        relation.append((key,equiv[1]))
+        labels[key] = key
+        labels[equiv[1]] = equiv[1]
       else: 
         key = (term)
+        labels[key] = key
+        relation.append((key,key))
         relation_graph[key].append("")
   
-  return relation_graph, restriction_graph
+  return relation_graph, constraints, relation, labels
 
 ######################################## MAIN ########################################
 
@@ -345,7 +381,7 @@ def main():
   # print('\n')
 
   # relation_graph, restriction_graph = create_graphs(clause_set)
-  abstract_clause, my_map, another_map = create_abstraction(clause_set)
+  abstract_clause, another_map = create_abstraction(clause_set)
 
   print('\n')
   print("CLAUSE SET")
@@ -379,16 +415,38 @@ def main():
   else:
     print("UNSATISFIABLE")
 
-  relation_graph, restriction_graph = create_graphs(aux)
+  relation_graph, restriction, relation, labels = create_graphs(aux)
 
   print(f"RELATION")
   print(relation_graph)
   print("\n")
   print(f"RESTRICTION")
-  print(restriction_graph)
+  print(restriction)
+  print('\n')
+  print("LABELS")
+  print(labels)
+  print('\n')
+  print("RELATION")
+  print(relation)
   print('\n')
 
-  # print('\n')
+  cc = CongruenceClosure(relation_graph, labels)
+  for key in labels:
+    cc.add(key)
+  for u, v in relation:
+    cc.union(u, v)
+  for u, v in relation:
+    cc.merge(u, v)
 
+  sat_res = cc.is_sat(restriction)
+  print(f"The result is: {sat_res}")
+    
+  classes = defaultdict(list)
+  for vertex in relation_graph:
+    classes[cc.find(vertex)].append(vertex)
+
+  print("Equivalence classes:")
+  for eq_class in classes.values():
+    print(eq_class)
 if __name__ == "__main__":
   main()
