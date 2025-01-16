@@ -159,56 +159,53 @@ class Expr:
 
 class CongruenceClosure:
   def __init__(self, graph, labels):
-      self.graph = graph  # Adjacency list representation of the graph {v: [successors]}
-      self.labels = labels  # Labels of the vertices {v: label}
-      self.parent = {v: v for v in graph}  # Disjoint-set parent
-      self.rank = {v: 0 for v in graph}  # Rank for union by rank
+    self.graph = graph  # Adjacency list representation of the graph {v: [successors]}
+    self.labels = labels  # Labels of the vertices {v: label} (like explained on the article)
+    self.parent = {v: v for v in graph}  # Disjoint-set parent
+    self.rank = {v: 0 for v in graph}  # Rank for union by rank (one of the optimizations)
   
-  def find(self, element):
-        
-        if self.parent[element] != element:
-            # path compression: recursively set the parent to the representative
-            self.parent[element] = self.find(self.parent[element])
-        return self.parent[element]
+  def find(self, element):  
+    if self.parent[element] != element:
+      # path compression: recursively set the parent to the representative
+      self.parent[element] = self.find(self.parent[element])
+    return self.parent[element]
 
   def union(self, element1, element2):
-        root1 = self.find(element1)
-        root2 = self.find(element2)
+    root1 = self.find(element1)
+    root2 = self.find(element2)
 
-        if root1 != root2:
-            # union by rank: 
-            if self.rank[root1] > self.rank[root2]:
-                self.parent[root2] = root1
-            elif self.rank[root1] < self.rank[root2]:
-                self.parent[root1] = root2
-            else:
-                # if ranks are the same, arbitrarily choose one as root and increment its rank
-                self.parent[root2] = root1
-                self.rank[root1] += 1
+    if root1 != root2:
+      # union by rank: 
+      if self.rank[root1] > self.rank[root2]:
+        self.parent[root2] = root1
+      elif self.rank[root1] < self.rank[root2]:
+        self.parent[root1] = root2
+      else:
+        # if ranks are the same, arbitrarily choose one as root and increment its rank
+        self.parent[root2] = root1
+        self.rank[root1] += 1
 
   def add(self, element):
- 
-        if element not in self.parent:
-            self.parent[element] = element
-            self.rank[element] = 0
+    if element not in self.parent:
+      self.parent[element] = element
+      self.rank[element] = 0
 
   def connected(self, element1, element2):        
-        # vê se estão no mesmo set
-        return self.find(element1) == self.find(element2)
+    # vê se estão no mesmo set
+    return self.find(element1) == self.find(element2)
   
   def congruent(self, u, v):
-      """Check if two vertices are congruent under the current relation."""
-      if self.labels[u] != self.labels[v] or len(self.graph[u]) != len(self.graph[v]):
+    # Check if two vertices are congruent under the current relation (implementing according to the article):
+    if self.labels[u] != self.labels[v] or len(self.graph[u]) != len(self.graph[v]):
+      # (the outdegree is gonna be exactly the length of the list of "sons")
+      return False
+    for i in range(len(self.graph[u])):
+      if self.find(self.graph[u][i]) != self.find(self.graph[v][i]):
         return False
-        
-      for i in range(len(self.graph[u])):
-        if self.find(self.graph[u][i]) != self.find(self.graph[v][i]):
-          return False
-
-      return True
+    return True
 
   def merge(self, u, v):
-    """Merge the equivalence classes of u and v, updating the congruence closure."""
+    # Merge the equivalence classes of u and v, updating the congruence closure (also, according to the article):
     if self.find(u) == self.find(v):
       return
 
@@ -221,8 +218,9 @@ class CongruenceClosure:
       for y in predecessors_v:
         if self.find(x) != self.find(y) and self.congruent(x, y):
           self.merge(x, y)
+
   def is_sat(self, constraints):
-    """Check if a set of constraints is satisfiable."""
+    #Check if the final result is SAT under the set of constraints.
     for u, v in constraints:
       if self.congruent(u, v):
         return False
@@ -318,10 +316,10 @@ def create_abstraction(clause_set):
   return abstract_clause, another_map
 
 def create_graphs(clause):
-  relation_graph = defaultdict(list)
+  relation_graph = defaultdict(list) # we are gonna need this a the graph for congruence closure
   constraints = []
   relation = []
-  labels = {}
+  labels = {} # I forgot to add that before, but it is requested in the article
   for term in clause: 
     if term.op.name == 'not': # verifica se o termo vai estar ou não no grafo de restrições
       neg_arg = term.args[0] # not possui apenas 1 argumento
@@ -331,7 +329,7 @@ def create_graphs(clause):
         key = (restriction[0]) # adiciona a chave como sendo parte da igualdade em si com o index da clause q está
         constraints.append((key, restriction[1]))
         labels[key] = key
-        labels[restriction[1]] = restriction[1]
+        labels[restriction[1]] = restriction[1] # atualiza a label
       else: 
         key = (term)
         labels[key] = key
@@ -448,5 +446,6 @@ def main():
   print("Equivalence classes:")
   for eq_class in classes.values():
     print(eq_class)
+
 if __name__ == "__main__":
   main()
