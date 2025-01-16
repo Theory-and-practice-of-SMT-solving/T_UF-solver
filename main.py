@@ -157,6 +157,45 @@ class Expr:
         tree.node(leaf_id, label=str(arg))
         tree.edge(node_id, leaf_id)
 
+class UnionFind:
+    def __init__(self):
+        
+        self.parent = {}
+        self.rank = {}
+
+    def find(self, element):
+        
+        if self.parent[element] != element:
+            # path compression: recursively set the parent to the representative
+            self.parent[element] = self.find(self.parent[element])
+        return self.parent[element]
+
+    def union(self, element1, element2):
+        root1 = self.find(element1)
+        root2 = self.find(element2)
+
+        if root1 != root2:
+            # union by rank: 
+            if self.rank[root1] > self.rank[root2]:
+                self.parent[root2] = root1
+            elif self.rank[root1] < self.rank[root2]:
+                self.parent[root1] = root2
+            else:
+                # if ranks are the same, arbitrarily choose one as root and increment its rank
+                self.parent[root2] = root1
+                self.rank[root1] += 1
+
+    def add(self, element):
+ 
+        if element not in self.parent:
+            self.parent[element] = element
+            self.rank[element] = 0
+
+    def connected(self, element1, element2):
+        
+        # vê se estão no mesmo set
+        return self.find(element1) == self.find(element2)
+
 # converting the formula given by pySMT parser to Expr
 def convert_to_expr(formula): 
   if formula.is_symbol(): 
@@ -223,6 +262,7 @@ def get_clause_set(expr):
 def create_abstraction(clause_set):
   abstract_clause = []
   my_map = {}
+  another_map = {}
 
   for clause in clause_set:
     converted_to_int = []
@@ -233,42 +273,46 @@ def create_abstraction(clause_set):
         converted_to_int.append(-1 * my_map[s.args[0]])
       elif s.op.name == "not":
         my_map[s.args[0]] = len(my_map) + 1
+        another_map[len(my_map)] = s.args[0]
         converted_to_int.append(-1 * my_map[s.args[0]])
       else:
         my_map[s] = len(my_map) + 1
+        another_map[len(my_map)] = s
         converted_to_int.append(my_map[s])
     abstract_clause.append(converted_to_int)
 
-  return abstract_clause, my_map
+  return abstract_clause, my_map, another_map
 
-def create_graphs(clause_set):
+uf_general = UnionFind()
+def create_graphs(clause):
   relation_graph = defaultdict(list)
   restriction_graph = defaultdict(list)
-  clause_index = 0
 
-  for clause in clause_set:
-    for term in clause: 
-
-      if term.op.name == 'not': # verifica se o termo vai estar ou não no grafo de restrições
-        neg_arg = term.args[0] # not possui apenas 1 argumento
+  for term in clause: 
+    if term.op.name == 'not': # verifica se o termo vai estar ou não no grafo de restrições
+      neg_arg = term.args[0] # not possui apenas 1 argumento
         
-        if neg_arg.op.name == 'equal':
-          restriction = [x for x in neg_arg.args] # cria uma lista com os argumentos
-          key = (restriction[0], clause_index) # adiciona a chave como sendo parte da igualdade em si com o index da clause q está
-          restriction_graph[key].append(restriction[1])
-        else: 
-          key = (term, clause_index)
-          restriction_graph[key].append("")
-      else:
-        if term.op.name == "equal":
-          equiv = [x for x in term.args] # cria uma lista com os argumentos
-          key = (equiv[0], clause_index) # adiciona a chave como sendo parte da igualdade em si com o index da clause q está
-          relation_graph[key].append(equiv[1])
-        else: 
-          key = (term, clause_index)
-          relation_graph[key].append("")
-
-    clause_index = clause_index + 1
+      if neg_arg.op.name == 'equal':
+        restriction = [x for x in neg_arg.args] # cria uma lista com os argumentos
+        key = (restriction[0]) # adiciona a chave como sendo parte da igualdade em si com o index da clause q está
+        uf_general.add(restriction[0])
+        uf_general.add(restriction[1])
+        uf_general.union(restriction[0],restriction[1])
+        restriction_graph[key].append(restriction[1])
+      else: 
+        key = (term)
+        restriction_graph[key].append("")
+    else:
+      if term.op.name == "equal":
+        equiv = [x for x in term.args] # cria uma lista com os argumentos
+        key = (equiv[0]) # adiciona a chave como sendo parte da igualdade em si com o index da clause q está
+        uf_general.add(equiv[0])
+        uf_general.add(equiv[1])
+        uf_general.union(equiv[0],equiv[1])
+        relation_graph[key].append(equiv[1])
+      else: 
+        key = (term)
+        relation_graph[key].append("")
   
   return relation_graph, restriction_graph
 
@@ -300,8 +344,8 @@ def main():
   # print(f'Clause Set: {clause_set}')
   # print('\n')
 
-  relation_graph, restriction_graph = create_graphs(clause_set)
-  abstract_clause, my_map = create_abstraction(clause_set)
+  # relation_graph, restriction_graph = create_graphs(clause_set)
+  abstract_clause, my_map, another_map = create_abstraction(clause_set)
 
   print('\n')
   print("CLAUSE SET")
@@ -310,27 +354,39 @@ def main():
   print("ABSTRACT CLAUSE")
   print(abstract_clause)
   print("\n")
-  print(f"RELATION")
-  print(relation_graph)
-  print("\n")
-  print(f"RESTRICTION")
-  print(restriction_graph)
-  print('\n')
 
   # print(f'Abstraction: {abstraction}')
   # print('\n')
   # print(f'Mapping: {my_map}')
   # print('\n')
 
-  # solver = Solver(name='g3')  # Use the default SAT solver (Glucose3 here)
-  # for i in abstraction:
-  #   solver.add_clause(i)
+  solver = Solver(name='g3')  # Use the default SAT solver (Glucose3 here)
+  for i in abstract_clause:
+    solver.add_clause(i)
 
-  # if solver.solve():
-  #   print("SATISFIABLE")
-  #   print("Solution:", solver.get_model())  # Get a satisfying assignment (or not)
-  # else:
-  #   print("UNSATISFIABLE")
+
+  if solver.solve():
+    aux = []
+    model = solver.get_model()
+    print("Solution:", model)  # Get a satisfying assignment (or not)
+    # Agora, vamos criar o grafo de conjunções que precisamos:
+    for m in model:
+      if m >= 0 :
+        aux.append(another_map[m])
+      else :
+        aux.append(Expr(Symbol('not', True), another_map[(-1*m)])) # acredito que vai ser importante no fim das contas
+    print(aux)
+  else:
+    print("UNSATISFIABLE")
+
+  relation_graph, restriction_graph = create_graphs(aux)
+
+  print(f"RELATION")
+  print(relation_graph)
+  print("\n")
+  print(f"RESTRICTION")
+  print(restriction_graph)
+  print('\n')
 
   # print('\n')
 
