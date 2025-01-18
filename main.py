@@ -292,34 +292,35 @@ def get_clause_set(expr):
   return clause_set
 
 def create_abstraction(clause_set):
-  abstract_clause = []
-  my_map = {}
-  another_map = {}
+  abstract_clause_set = []
+  term_to_int_map = {}
+  int_to_term_map = {}
 
   for clause in clause_set:
     converted_to_int = []
-    for s in clause:
-      if s in my_map:
-        converted_to_int.append(my_map[s])
-      elif s.op.name == "not" and s.args[0] in my_map:
-        converted_to_int.append(-1 * my_map[s.args[0]])
-      elif s.op.name == "not":
-        my_map[s.args[0]] = len(my_map) + 1
-        another_map[len(my_map)] = s.args[0]
-        converted_to_int.append(-1 * my_map[s.args[0]])
+    for term in clause:
+      if term in term_to_int_map:
+        converted_to_int.append(term_to_int_map[term])
+      elif term.op.name == "not" and term.args[0] in term_to_int_map:
+        converted_to_int.append(-1 * term_to_int_map[term.args[0]])
+      elif term.op.name == "not":
+        term_to_int_map[term.args[0]] = len(term_to_int_map) + 1
+        int_to_term_map[len(term_to_int_map)] = term.args[0]
+        converted_to_int.append(-1 * term_to_int_map[term.args[0]])
       else:
-        my_map[s] = len(my_map) + 1
-        another_map[len(my_map)] = s
-        converted_to_int.append(my_map[s])
-    abstract_clause.append(converted_to_int)
+        term_to_int_map[term] = len(term_to_int_map) + 1
+        int_to_term_map[len(term_to_int_map)] = term
+        converted_to_int.append(term_to_int_map[term])
+    abstract_clause_set.append(converted_to_int)
 
-  return abstract_clause, another_map
+  return abstract_clause_set, int_to_term_map
 
 def create_graphs(clause):
   relation_graph = defaultdict(list) # we are gonna need this a the graph for congruence closure
   constraints = []
   relation = []
   labels = {} # I forgot to add that before, but it is requested in the article
+
   for term in clause: 
     if term.op.name == 'not': # verifica se o termo vai estar ou não no grafo de restrições
       neg_arg = term.args[0] # not possui apenas 1 argumento
@@ -379,14 +380,14 @@ def main():
   # print('\n')
 
   # relation_graph, restriction_graph = create_graphs(clause_set)
-  abstract_clause, another_map = create_abstraction(clause_set)
+  abstract_clause_set, int_to_term_map = create_abstraction(clause_set)
 
   print('\n')
   print("CLAUSE SET")
   print(clause_set)
   print('\n')
-  print("ABSTRACT CLAUSE")
-  print(abstract_clause)
+  print("ABSTRACT CLAUSE SET")
+  print(abstract_clause_set)
   print("\n")
 
   # print(f'Abstraction: {abstraction}')
@@ -395,57 +396,64 @@ def main():
   # print('\n')
 
   solver = Solver(name='g3')  # Use the default SAT solver (Glucose3 here)
-  for i in abstract_clause:
-    solver.add_clause(i)
+  for abstract_clause in abstract_clause_set:
+    solver.add_clause(abstract_clause)
 
 
   if solver.solve():
-    aux = []
+    sat_assignment = []
     model = solver.get_model()
-    print("Solution:", model)  # Get a satisfying assignment (or not)
+    print("SAT ABSTRACTION")
+    print(model) # Get a satisfying assignment (or not)
+    print('\n')
+
     # Agora, vamos criar o grafo de conjunções que precisamos:
     for m in model:
       if m >= 0 :
-        aux.append(another_map[m])
+        sat_assignment.append(int_to_term_map[m])
       else :
-        aux.append(Expr(Symbol('not', True), another_map[(-1*m)])) # acredito que vai ser importante no fim das contas
-    print(aux)
+        sat_assignment.append(Expr(Symbol('not', True), int_to_term_map[(-1*m)])) # acredito que vai ser importante no fim das contas
+
+    print("SAT ASSIGNMENT")
+    print(sat_assignment)
+    print('\n')
   else:
     print("UNSATISFIABLE")
+    print('\n')
 
-  relation_graph, restriction, relation, labels = create_graphs(aux)
+  # relation_graph, restriction, relation, labels = create_graphs(sat_assignment)
 
-  print(f"RELATION")
-  print(relation_graph)
-  print("\n")
-  print(f"RESTRICTION")
-  print(restriction)
-  print('\n')
-  print("LABELS")
-  print(labels)
-  print('\n')
-  print("RELATION")
-  print(relation)
-  print('\n')
+  # print(f"RELATION")
+  # print(relation_graph)
+  # print("\n")
+  # print(f"RESTRICTION")
+  # print(restriction)
+  # print('\n')
+  # print("LABELS")
+  # print(labels)
+  # print('\n')
+  # print("RELATION")
+  # print(relation)
+  # print('\n')
 
-  cc = CongruenceClosure(relation_graph, labels)
-  for key in labels:
-    cc.add(key)
-  for u, v in relation:
-    cc.union(u, v)
-  for u, v in relation:
-    cc.merge(u, v)
+  # cc = CongruenceClosure(relation_graph, labels)
+  # for key in labels:
+  #   cc.add(key)
+  # for u, v in relation:
+  #   cc.union(u, v)
+  # for u, v in relation:
+  #   cc.merge(u, v)
 
-  sat_res = cc.is_sat(restriction)
-  print(f"The result is: {sat_res}")
+  # sat_res = cc.is_sat(restriction)
+  # print(f"The result is: {sat_res}")
     
-  classes = defaultdict(list)
-  for vertex in relation_graph:
-    classes[cc.find(vertex)].append(vertex)
+  # classes = defaultdict(list)
+  # for vertex in relation_graph:
+  #   classes[cc.find(vertex)].append(vertex)
 
-  print("Equivalence classes:")
-  for eq_class in classes.values():
-    print(eq_class)
+  # print("Equivalence classes:")
+  # for eq_class in classes.values():
+  #   print(eq_class)
 
 if __name__ == "__main__":
   main()
