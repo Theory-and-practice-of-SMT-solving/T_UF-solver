@@ -246,8 +246,6 @@ class CongruenceClosure:
 
         return list(unsat_core)
 
-        return list(unsat_core)
-
     def reproduces_conflict(self, core):
         # Check if a given core reproduces the conflict
         temp_cc = CongruenceClosure(self.graph, self.labels)
