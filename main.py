@@ -236,13 +236,16 @@ class CongruenceClosure:
         return True, None
 
     def trace_unsat_core(self, conflicts):
+        def trace_unsat_core(self, conflicts):
         # Trace the unsat core using the merge history and the initial conflicts
         unsat_core = set(conflicts)
+
         # Backtrack through the merge history to identify contributing equations
         for u, v in reversed(self.merge_history):
-            if not self.reproduces_conflict(unsat_core):
-            # (u, v) é essencial para o conflito; adiciona esse par
+            if self.connected(u, v):
                 unsat_core.add((u, v))
+            if len(unsat_core) > 1 and not self.reproduces_conflict(unsat_core):
+                unsat_core.remove((u, v))
 
         return list(unsat_core)
 
