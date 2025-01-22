@@ -241,7 +241,7 @@ class CongruenceClosure:
         # Backtrack through the merge history to identify contributing equations
         for u, v in reversed(self.merge_history):
             if not self.reproduces_conflict(unsat_core):
-            # (u, v) é essencial para o conflito; adiciona de volta
+            # (u, v) é essencial para o conflito; adiciona esse par
                 unsat_core.add((u, v))
 
         return list(unsat_core)
