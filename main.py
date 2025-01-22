@@ -158,73 +158,105 @@ class Expr:
         tree.edge(node_id, leaf_id)
 
 class CongruenceClosure:
-  def __init__(self, graph, labels):
-    self.graph = graph  # Adjacency list representation of the graph {v: [successors]}
-    self.labels = labels  # Labels of the vertices {v: label} (like explained on the article)
-    self.parent = {v: v for v in graph}  # Disjoint-set parent
-    self.rank = {v: 0 for v in graph}  # Rank for union by rank (one of the optimizations)
-  
-  def find(self, element):  
-    if self.parent[element] != element:
-      # path compression: recursively set the parent to the representative
-      self.parent[element] = self.find(self.parent[element])
-    return self.parent[element]
+    def __init__(self, graph, labels):
+        self.graph = graph  # Adjacency list representation of the graph {v: [successors]}
+        self.labels = labels  # Labels of the vertices {v: label} (like explained in the article)
+        self.parent = {v: v for v in graph}  # Disjoint-set parent
+        self.rank = {v: 0 for v in graph}  # Rank for union by rank (one of the optimizations)
+        self.merge_history = []  # To track the history of merges for conflict tracing
 
-  def union(self, element1, element2):
-    root1 = self.find(element1)
-    root2 = self.find(element2)
+    def find(self, element):  
+        if self.parent[element] != element:
+            # Path compression: recursively set the parent to the representative
+            self.parent[element] = self.find(self.parent[element])
+        return self.parent[element]
 
-    if root1 != root2:
-      # union by rank: 
-      if self.rank[root1] > self.rank[root2]:
-        self.parent[root2] = root1
-      elif self.rank[root1] < self.rank[root2]:
-        self.parent[root1] = root2
-      else:
-        # if ranks are the same, arbitrarily choose one as root and increment its rank
-        self.parent[root2] = root1
-        self.rank[root1] += 1
+    def union(self, element1, element2):
+        root1 = self.find(element1)
+        root2 = self.find(element2)
 
-  def add(self, element):
-    if element not in self.parent:
-      self.parent[element] = element
-      self.rank[element] = 0
+        if root1 != root2:
+            # Union by rank:
+            if self.rank[root1] > self.rank[root2]:
+                self.parent[root2] = root1
+            elif self.rank[root1] < self.rank[root2]:
+                self.parent[root1] = root2
+            else:
+                # If ranks are the same, arbitrarily choose one as root and increment its rank
+                self.parent[root2] = root1
+                self.rank[root1] += 1
 
-  def connected(self, element1, element2):        
-    # vê se estão no mesmo set
-    return self.find(element1) == self.find(element2)
-  
-  def congruent(self, u, v):
-    # Check if two vertices are congruent under the current relation (implementing according to the article):
-    if self.labels[u] != self.labels[v] or len(self.graph[u]) != len(self.graph[v]):
-      # (the outdegree is gonna be exactly the length of the list of "sons")
-      return False
-    for i in range(len(self.graph[u])):
-      if self.find(self.graph[u][i]) != self.find(self.graph[v][i]):
+            # Record the merge for backtracking
+            self.merge_history.append((element1, element2))
+
+    def add(self, element):
+        if element not in self.parent:
+            self.parent[element] = element
+            self.rank[element] = 0
+
+    def connected(self, element1, element2):        
+        # Check if two elements are in the same equivalence class
+        return self.find(element1) == self.find(element2)
+
+    def congruent(self, u, v):
+        # Check if two vertices are congruent under the current relation:
+        if self.labels[u] != self.labels[v] or len(self.graph[u]) != len(self.graph[v]):
+            # The outdegree must match
+            return False
+        for i in range(len(self.graph[u])):
+            if self.find(self.graph[u][i]) != self.find(self.graph[v][i]):
+                return False
+        return True
+
+    def merge(self, u, v):
+        # Merge the equivalence classes of u and v, updating the congruence closure:
+        if self.find(u) == self.find(v):
+            return
+
+        predecessors_u = {x for x in self.graph if u in self.graph[x]}
+        predecessors_v = {x for x in self.graph if v in self.graph[x]}
+
+        self.union(u, v)
+
+        for x in predecessors_u:
+            for y in predecessors_v:
+                if self.find(x) != self.find(y) and self.congruent(x, y):
+                    self.merge(x, y)
+
+    def is_sat(self, constraints):
+        # Check if the result is SAT under the set of constraints and return an unsat core if not
+        unsat_core = []
+
+        for u, v in constraints:
+            if not self.congruent(u, v):  # If u and v are not congruent, skip
+                continue
+            # Conflict detected: add the disequality to the unsat core
+            unsat_core.append((u, v))
+            return False, self.trace_unsat_core(unsat_core)
+        return True, None
+
+    def trace_unsat_core(self, conflicts):
+        # Trace the unsat core using the merge history and the initial conflicts
+        unsat_core = set(conflicts)
+        # Backtrack through the merge history to identify contributing equations
+        for u, v in reversed(self.merge_history):
+            if not self.reproduces_conflict(unsat_core):
+            # (u, v) é essencial para o conflito; adiciona de volta
+                unsat_core.add((u, v))
+
+        return list(unsat_core)
+
+        return list(unsat_core)
+
+    def reproduces_conflict(self, core):
+        # Check if a given core reproduces the conflict
+        temp_cc = CongruenceClosure(self.graph, self.labels)
+        for u, v in core:
+            temp_cc.merge(u, v)
+        for u, v in core:
+            if temp_cc.congruent(u, v):
+                return True
         return False
-    return True
-
-  def merge(self, u, v):
-    # Merge the equivalence classes of u and v, updating the congruence closure (also, according to the article):
-    if self.find(u) == self.find(v):
-      return
-
-    predecessors_u = {x for x in self.graph if u in self.graph[x]}
-    predecessors_v = {x for x in self.graph if v in self.graph[x]}
-
-    self.union(u, v)
-
-    for x in predecessors_u:
-      for y in predecessors_v:
-        if self.find(x) != self.find(y) and self.congruent(x, y):
-          self.merge(x, y)
-
-  def is_sat(self, constraints):
-    #Check if the final result is SAT under the set of constraints.
-    for u, v in constraints:
-      if self.congruent(u, v):
-        return False
-    return True
 
 ####################################################################################
 
@@ -292,35 +324,34 @@ def get_clause_set(expr):
   return clause_set
 
 def create_abstraction(clause_set):
-  abstract_clause_set = []
-  term_to_int_map = {}
-  int_to_term_map = {}
+  abstract_clause = []
+  my_map = {}
+  another_map = {}
 
   for clause in clause_set:
     converted_to_int = []
-    for term in clause:
-      if term in term_to_int_map:
-        converted_to_int.append(term_to_int_map[term])
-      elif term.op.name == "not" and term.args[0] in term_to_int_map:
-        converted_to_int.append(-1 * term_to_int_map[term.args[0]])
-      elif term.op.name == "not":
-        term_to_int_map[term.args[0]] = len(term_to_int_map) + 1
-        int_to_term_map[len(term_to_int_map)] = term.args[0]
-        converted_to_int.append(-1 * term_to_int_map[term.args[0]])
+    for s in clause:
+      if s in my_map:
+        converted_to_int.append(my_map[s])
+      elif s.op.name == "not" and s.args[0] in my_map:
+        converted_to_int.append(-1 * my_map[s.args[0]])
+      elif s.op.name == "not":
+        my_map[s.args[0]] = len(my_map) + 1
+        another_map[len(my_map)] = s.args[0]
+        converted_to_int.append(-1 * my_map[s.args[0]])
       else:
-        term_to_int_map[term] = len(term_to_int_map) + 1
-        int_to_term_map[len(term_to_int_map)] = term
-        converted_to_int.append(term_to_int_map[term])
-    abstract_clause_set.append(converted_to_int)
+        my_map[s] = len(my_map) + 1
+        another_map[len(my_map)] = s
+        converted_to_int.append(my_map[s])
+    abstract_clause.append(converted_to_int)
 
-  return abstract_clause_set, int_to_term_map
+  return abstract_clause, another_map
 
 def create_graphs(clause):
   relation_graph = defaultdict(list) # we are gonna need this a the graph for congruence closure
   constraints = []
   relation = []
   labels = {} # I forgot to add that before, but it is requested in the article
-
   for term in clause: 
     if term.op.name == 'not': # verifica se o termo vai estar ou não no grafo de restrições
       neg_arg = term.args[0] # not possui apenas 1 argumento
@@ -380,14 +411,14 @@ def main():
   # print('\n')
 
   # relation_graph, restriction_graph = create_graphs(clause_set)
-  abstract_clause_set, int_to_term_map = create_abstraction(clause_set)
+  abstract_clause, another_map = create_abstraction(clause_set)
 
   print('\n')
   print("CLAUSE SET")
   print(clause_set)
   print('\n')
-  print("ABSTRACT CLAUSE SET")
-  print(abstract_clause_set)
+  print("ABSTRACT CLAUSE")
+  print(abstract_clause)
   print("\n")
 
   # print(f'Abstraction: {abstraction}')
@@ -396,64 +427,57 @@ def main():
   # print('\n')
 
   solver = Solver(name='g3')  # Use the default SAT solver (Glucose3 here)
-  for abstract_clause in abstract_clause_set:
-    solver.add_clause(abstract_clause)
+  for i in abstract_clause:
+    solver.add_clause(i)
 
 
   if solver.solve():
-    sat_assignment = []
+    aux = []
     model = solver.get_model()
-    print("SAT ABSTRACTION")
-    print(model) # Get a satisfying assignment (or not)
-    print('\n')
-
+    print("Solution:", model)  # Get a satisfying assignment (or not)
     # Agora, vamos criar o grafo de conjunções que precisamos:
     for m in model:
       if m >= 0 :
-        sat_assignment.append(int_to_term_map[m])
+        aux.append(another_map[m])
       else :
-        sat_assignment.append(Expr(Symbol('not', True), int_to_term_map[(-1*m)])) # acredito que vai ser importante no fim das contas
-
-    print("SAT ASSIGNMENT")
-    print(sat_assignment)
-    print('\n')
+        aux.append(Expr(Symbol('not', True), another_map[(-1*m)])) # acredito que vai ser importante no fim das contas
+    print(aux)
   else:
     print("UNSATISFIABLE")
-    print('\n')
 
-  # relation_graph, restriction, relation, labels = create_graphs(sat_assignment)
+  relation_graph, restriction, relation, labels = create_graphs(aux)
 
-  # print(f"RELATION")
-  # print(relation_graph)
-  # print("\n")
-  # print(f"RESTRICTION")
-  # print(restriction)
-  # print('\n')
-  # print("LABELS")
-  # print(labels)
-  # print('\n')
-  # print("RELATION")
-  # print(relation)
-  # print('\n')
+  print(f"RELATION")
+  print(relation_graph)
+  print("\n")
+  print(f"RESTRICTION")
+  print(restriction)
+  print('\n')
+  print("LABELS")
+  print(labels)
+  print('\n')
+  print("RELATION")
+  print(relation)
+  print('\n')
 
-  # cc = CongruenceClosure(relation_graph, labels)
-  # for key in labels:
-  #   cc.add(key)
-  # for u, v in relation:
-  #   cc.union(u, v)
-  # for u, v in relation:
-  #   cc.merge(u, v)
+  cc = CongruenceClosure(relation_graph, labels)
+  for key in labels:
+    cc.add(key)
+  for u, v in relation:
+    cc.union(u, v)
+  for u, v in relation:
+    cc.merge(u, v)
 
-  # sat_res = cc.is_sat(restriction)
-  # print(f"The result is: {sat_res}")
+  sat_res = cc.is_sat(restriction)
+  print(f"The result is: {sat_res}")
     
-  # classes = defaultdict(list)
-  # for vertex in relation_graph:
-  #   classes[cc.find(vertex)].append(vertex)
+  classes = defaultdict(list)
+  for vertex in relation_graph:
+    classes[cc.find(vertex)].append(vertex)
 
-  # print("Equivalence classes:")
-  # for eq_class in classes.values():
-  #   print(eq_class)
+  print("Equivalence classes:")
+  for eq_class in classes.values():
+    print(eq_class)
 
 if __name__ == "__main__":
   main()
