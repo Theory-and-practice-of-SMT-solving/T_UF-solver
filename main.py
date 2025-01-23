@@ -224,9 +224,11 @@ class CongruenceClosure:
     
   def merge(self, u, v):
     print(f'{u} AND {v} ARE EQUAL') # DEBUGGER
-    print('\n')
+    print('\n') # DEBUGGER
     # merge the equivalence classes of u and v, updating the congruence closure 
     if self.find(u) == self.find(v): # pegar o representante da classe e fundir os representantes
+      print('THEY ALREADY BELONG TO THE SAME CLASS') # DEBUGGER
+      print('\n') # DEBUGGER
       return
 
     predecessors_u = self.congruence_closure[u][2].copy()
@@ -235,7 +237,7 @@ class CongruenceClosure:
     self.union(u, v)
 
     self.show() # DEBUGGER
-    print('\n') 
+    print('\n') # DEBUGGER
 
     for x in predecessors_u:
       for y in predecessors_v:
@@ -245,14 +247,14 @@ class CongruenceClosure:
   def algorithm(self):
     # faz o merge das classes de equivalencias dos pares que sao iguais
     print('START - ALGORITHM') # DEBUGGER
-    print('\n')
+    print('\n') # DEBUGGER
     self.show() # DEBUGGER
-    print('\n')
+    print('\n') # DEBUGGER
     for x, y in self.equal_pairs:
       self.merge(x, y)
 
     print('END - ALGORITHM') # DEBUGGER
-    print('\n')
+    print('\n') # DEBUGGER
 
   def show(self): # DEBUGGER
     for i, _ in self.congruence_closure.items():
@@ -268,12 +270,14 @@ class CongruenceClosure:
   #   return self.find(element1) == self.find(element2)
 
   def is_sat(self):
-    # cria classes de equivalencias
+    # cria as classes de equivalencias
     self.algorithm()
     # check if the final result is SAT under the set of constraints.
     for u, v in self.constraints:
       if self.find(u) == self.find(v):
-        print(f'{u} AND {v} ARE EQUAL, BUT THEY SHOULD BE DIFFERENT')
+        print(f'{u} AND {v} ARE EQUAL')
+        print('\n')
+        print('BUT THEY SHOULD BE DIFFERENT')
         print('\n')
         return False
     return True
