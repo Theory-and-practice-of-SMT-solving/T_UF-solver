@@ -158,72 +158,123 @@ class Expr:
         tree.edge(node_id, leaf_id)
 
 class CongruenceClosure:
-  def __init__(self, graph, labels, predecessors):
-    self.graph = graph  # Adjacency list representation of the graph {v: [successors]}
-    self.labels = labels  # Labels of the vertices {v: label} (like explained on the article)
-    self.predecessors = predecessors
-    self.parent = {v: v for v in graph}  # Disjoint-set parent
-    self.rank = {v: 0 for v in graph}  # Rank for union by rank (one of the optimizations)
+  def __init__(self, graph, equal_pairs, constraints, congruence_closure):
+    self.graph = graph  # {v = (label, [sucessors])}
+    self.representatives = {v: v for v in graph}
+    self.equal_pairs = equal_pairs # pares que sao equivalentes
+    self.constraints = constraints # pares que nao podem ser equivalentes
+    self.congruence_closure = congruence_closure # {v = [rank, [equivalence_class], [predecessors]]}
   
+  # returns the unique name of the equivalence class of element
   def find(self, element):  
-    if self.parent[element] != element:
-      # path compression: recursively set the parent to the representative
-      self.parent[element] = self.find(self.parent[element])
-    return self.parent[element]
+    if self.representatives[element] != element:
+      # path compression: recursively set the representatives to the representatives
+      self.representatives[element] = self.find(self.representatives[element])
+    return self.representatives[element]
 
+  # combines the equivalence classes of the elements
+  # merges their predecessor lists into one
   def union(self, element1, element2):
     root1 = self.find(element1)
     root2 = self.find(element2)
 
-    if root1 != root2:
-      # union by rank: 
-      if self.rank[root1] > self.rank[root2]:
-        self.parent[root2] = root1
-      elif self.rank[root1] < self.rank[root2]:
-        self.parent[root1] = root2
-      else:
-        # if ranks are the same, arbitrarily choose one as root and increment its rank
-        self.parent[root2] = root1
-        self.rank[root1] += 1
+    if root1 == root2:
+      return
+    
+    rank1 = self.congruence_closure[root1][0]
+    rank2 = self.congruence_closure[root2][0]
+    # union by rank
+    if rank1 > rank2:
+      greater_representative = root1
+      smaller_representative = root2
 
-  def add(self, element):
-    if element not in self.parent:
-      self.parent[element] = element
-      self.rank[element] = 0
+      self.representatives[root2] = root1
+    elif rank1 < rank2:
+      greater_representative = root2
+      smaller_representative = root1
 
-  def connected(self, element1, element2):        
-    # vê se estão no mesmo set
-    return self.find(element1) == self.find(element2)
-  
+      self.representatives[root1] = root2
+    else:
+      # if ranks are the same, arbitrarily choose one as root and increment its rank
+      greater_representative = root1
+      smaller_representative = root2
+
+      self.representatives[root2] = root1
+      self.congruence_closure[root1][0] += 1
+
+    # funde as classes de equivalencias
+    greater_equivalence_class = self.congruence_closure[greater_representative][1]
+    smaller_equivalence_class = self.congruence_closure[smaller_representative][1]
+    greater_equivalence_class.extend(smaller_equivalence_class)
+
+    # funde os predecessores
+    greater_predecessor = self.congruence_closure[greater_representative][2]
+    smaller_predecessor = self.congruence_closure[smaller_representative][2]
+    greater_predecessor.update(smaller_predecessor)
+
   def congruent(self, u, v):
-    # Check if two vertices are congruent under the current relation (implementing according to the article):
-    if self.labels[u] != self.labels[v] or len(self.graph[u]) != len(self.graph[v]):
+    # check if two vertices are congruent under the current relation:
+    if self.graph[u][0] != self.graph[v][0] or len(self.graph[u][1]) != len(self.graph[v][1]):
       # (the outdegree is gonna be exactly the length of the list of "sons")
       return False
-    for i in range(len(self.graph[u])):
-      if self.find(self.graph[u][i]) != self.find(self.graph[v][i]):
+    for i in range(len(self.graph[u][1])):
+      if self.find(self.graph[u][1][i]) != self.find(self.graph[v][1][i]):
         return False
     return True
-
+    
   def merge(self, u, v):
-    # Merge the equivalence classes of u and v, updating the congruence closure (also, according to the article):
-    if self.find(u) == self.find(v):
+    print(f'{u} AND {v} ARE EQUAL') # DEBUGGER
+    print('\n')
+    # merge the equivalence classes of u and v, updating the congruence closure 
+    if self.find(u) == self.find(v): # pegar o representante da classe e fundir os representantes
       return
 
-    predecessors_u = {x for x in self.graph if u in self.graph[x]}
-    predecessors_v = {x for x in self.graph if v in self.graph[x]}
+    predecessors_u = self.congruence_closure[u][2].copy()
+    predecessors_v = self.congruence_closure[v][2].copy()
 
     self.union(u, v)
+
+    self.show() # DEBUGGER
+    print('\n') 
 
     for x in predecessors_u:
       for y in predecessors_v:
         if self.find(x) != self.find(y) and self.congruent(x, y):
           self.merge(x, y)
 
-  def is_sat(self, constraints):
-    # Check if the final result is SAT under the set of constraints.
-    for u, v in constraints:
-      if self.congruent(u, v):
+  def algorithm(self):
+    # faz o merge das classes de equivalencias dos pares que sao iguais
+    print('START - ALGORITHM') # DEBUGGER
+    print('\n')
+    self.show() # DEBUGGER
+    print('\n')
+    for x, y in self.equal_pairs:
+      self.merge(x, y)
+
+    print('END - ALGORITHM') # DEBUGGER
+    print('\n')
+
+  def show(self): # DEBUGGER
+    for i, _ in self.congruence_closure.items():
+        print(f'VERTEX: {i} ----------> REPRESENTATIVE: {self.find(i)}')
+
+  # def add(self, element):
+  #   if element not in self.representatives:
+  #     self.representatives[element] = element
+  #     self.rank[element] = 0
+
+  # def connected(self, element1, element2):        
+  #   # vê se estão no mesmo set
+  #   return self.find(element1) == self.find(element2)
+
+  def is_sat(self):
+    # cria classes de equivalencias
+    self.algorithm()
+    # check if the final result is SAT under the set of constraints.
+    for u, v in self.constraints:
+      if self.find(u) == self.find(v):
+        print(f'{u} AND {v} ARE EQUAL, BUT THEY SHOULD BE DIFFERENT')
+        print('\n')
         return False
     return True
 
@@ -316,22 +367,34 @@ def create_abstraction(clause_set):
 
   return abstract_clause_set, int_to_term_map
 
-def create_vertices(term, graph, labels, predecessors, superterm):
-  labels[term] = term.op.name
-  graph[term] = [args for args in term.args]
+# def create_equivalence_class(terms, predecessors):
+#   all_predecessors = set()
+#   for term in terms:
+#     all_predecessors = all_predecessors | predecessors[term]
+  
+#   equivalence_class = (terms, all_predecessors)
+#   return equivalence_class
 
-  if superterm is not None and superterm not in predecessors[term]:
-    predecessors[term].append(superterm)
+def create_vertices(term, graph, congruence_closure, superterm):
+  label = term.op.name
+  graph[term] = (label, [args for args in term.args])
+
+  equivalence_class = congruence_closure[term][1]
+  if term not in equivalence_class:
+    equivalence_class.append(term)
+
+  predecessors = congruence_closure[term][2] 
+  if superterm is not None and superterm not in predecessors:
+    predecessors.add(superterm)
 
   for arg in term.args:
-    create_vertices(arg, graph, labels, predecessors, term)
-
+    create_vertices(arg, graph, congruence_closure, term)
+    
 def create_graphs(clause):
-  graph = defaultdict(list) # we are gonna need this a the graph for congruence closure
-  constraints = [] # contem pares que nao podem ser equivalentes
-  relation = [] # contem pares que sao equivalentes
-  labels = defaultdict(list) # I forgot to add that before, but it is requested in the article
-  predecessors = defaultdict(list)
+  graph = defaultdict(tuple) # {v = (label, [sucessors])}
+  equal_pairs = list() # pares que sao equivalentes
+  constraints = list() # pares que nao podem ser equivalentes
+  congruence_closure = defaultdict(lambda: [0, [], set()]) # {v = (rank, [equivalence_class], [predecessors])}
 
   for term in clause: 
     if term.op.name == 'not': # verifica se o termo vai estar ou não no grafo de restrições
@@ -339,23 +402,25 @@ def create_graphs(clause):
         
       if neg_arg.op.name == 'equal':
         for arg in neg_arg.args:
-          create_vertices(arg, graph, labels, predecessors, None)
+          create_vertices(arg, graph, congruence_closure, None)
         
         constraints.append([x for x in neg_arg.args])
       else: 
-        create_vertices(term.args[0], graph, labels, predecessors, None)
+        create_vertices(term.args[0], graph, congruence_closure, None)
         constraints.append([term.args[0], term.args[0]])
     else:
       if term.op.name == "equal":
         for arg in term.args:
-          create_vertices(arg, graph, labels, predecessors, None)
+          create_vertices(arg, graph, congruence_closure, None)
 
-        relation.append([x for x in term.args])
+        # equivalence_class = create_equivalence_class(args, predecessors)
+        equal_pairs.append([x for x in term.args])
       else: 
-        create_vertices(term, graph, labels, predecessors, None)
-        relation.append([term, term])
+        create_vertices(term, graph, congruence_closure, None)
+        # equivalence_class = create_equivalence_class([term, term], predecessors)
+        equal_pairs.append([x for x in term.args])
   
-  return graph, constraints, relation, labels, predecessors
+  return graph, constraints, equal_pairs, congruence_closure
 
 ######################################## MAIN ########################################
 
@@ -426,28 +491,27 @@ def main():
     print("UNSATISFIABLE")
     print('\n')
 
-  graph, restriction, relation, labels, predecessors = create_graphs(sat_assignment)
+  graph, constraints, equal_pairs, congruence_closure = create_graphs(sat_assignment)
 
 
   print("EQUAL PAIRS")
-  print(relation)
+  print(equal_pairs)
   print('\n')
   print("DIFFERENT PAIRS")
-  print(restriction)
-  print('\n')
-  print("LABELS")
-  print(labels)
+  print(constraints)
   print('\n')
   print("GRAPH")
   for i in graph:
-    print(f'{i} ----------> {graph[i]} ----------> {predecessors[i]}')
+    print(f'{i} ----------> SUCESSORS: {graph[i][1]} ----------> PREDECESSORS: {congruence_closure[i][2]}')
   print('\n')
 
   # x = sat_assignment[0].args[0]
   # j = sat_assignment[1].args[0]
 
   # print(predecessors[x], predecessors[j], predecessors[x] == predecessors[j])
-  
+  # create_equivalence_class()
+  # print(relation)
+  # print(create_equivalence_class(relation[1], predecessors))
 
   # print(f"RELATION")
   # print(relation_graph)
@@ -462,7 +526,10 @@ def main():
   # print(relation)
   # print('\n')
 
-  # cc = CongruenceClosure(relation_graph, labels)
+  cc = CongruenceClosure(graph, equal_pairs, constraints, congruence_closure)
+  is_sat = cc.is_sat()
+  print(is_sat)
+
   # for key in labels:
   #   cc.add(key)
   # for u, v in relation:
@@ -480,6 +547,10 @@ def main():
   # print("Equivalence classes:")
   # for eq_class in classes.values():
   #   print(eq_class)
+
+  # aux = defaultdict(lambda: (0, [], set()))
+  # aux[1][1].extend([1, 2])
+  # print(aux)
 
 if __name__ == "__main__":
   main()
