@@ -70,7 +70,7 @@ class TheorySolver:
     return True
     
   # merge the equivalence classes of u and v
-  def merge(self, u, v, justification):
+  def merge(self, u, v, justification, is_original):
 
     #######################################################
     print(f'{u} AND {v} ARE EQUAL')
@@ -91,7 +91,7 @@ class TheorySolver:
 
     self.union(u, v)
     # record the merge for backtracking
-    self.merge_history[(u, v)] = justification
+    self.merge_history[(u, v, is_original)] = justification
 
     #######################################################
     self.show()
@@ -101,7 +101,7 @@ class TheorySolver:
     for x in predecessors_u:
       for y in predecessors_v:
         if self.find(x) != self.find(y) and self.congruent(x, y):
-          self.merge(x, y, (u, v))
+          self.merge(x, y, (u, v), False)
 
   def run_theory_solver(self):
 
@@ -115,7 +115,7 @@ class TheorySolver:
 
     # merge the equivalence classes of equal pairs
     for x, y in self.equal_pairs:
-      self.merge(x, y, None)
+      self.merge(x, y, None, True)
 
     #######################################################
     print('END - ALGORITHM')
@@ -132,6 +132,7 @@ class TheorySolver:
         print('BUT THEY SHOULD BE DIFFERENT')
         print('\n')
         print("--------------------------------------------------------------------------------")
+        print(self.merge_history)
         #######################################################
 
         conflict = (u, v)
@@ -146,22 +147,23 @@ class TheorySolver:
     conflict_term = Expr(Symbol('not', True), conflict_term)
     
     unsat_core.append(conflict_term)
-    # searches for the first pair of terms that are equivalent to the conflicting terms.
-    for (x, y) in self.merge_history:
-      if self.find(x) == self.find(conflict[0]) and self.find(y) == self.find(conflict[0]):
+    # searches for the first pair of terms that are equivalent to the conflicting terms. (PRECISO GARANTIR QUE O PAR ESTÁ NA CLAUSE INICIAL)
+    for (x, y, z) in self.merge_history:
+      if z and self.find(x) == self.find(conflict[0]) and self.find(y) == self.find(conflict[0]):
         equality = Expr(Symbol('equal', True), x, y)
         unsat_core.append(equality)
-        # print(equality)
-
-        justification = self.merge_history[(x, y)]
+        print(x, y, z)
+        justification = self.merge_history[(x, y, z)]
+        print(justification)
         break
     
-    while justification != None:
-      print(justification)
-      print('aqui, no lado direito da equação é uma igualdade derivada')
-      # backtrack through the merge history to identify contributing equations
-      unsat_core.append(justification)
-      justification = self.merge_history[justification]
+    # # searches for the first pair of terms that are equivalent to the justification.
+    # while justification != None:
+    #   print(justification)
+    #   print('aqui, no lado direito da equação é uma igualdade derivada')
+    #   # backtrack through the merge history to identify contributing equations
+    #   unsat_core.append(justification)
+    #   justification = self.merge_history[justification]
 
     # print(unsat_core)
     return unsat_core
