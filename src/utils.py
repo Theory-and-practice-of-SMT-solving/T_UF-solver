@@ -78,7 +78,6 @@ def framework_CDCL(abstract_clause_set, term_to_int_map, int_to_term_map):
       return
 
     #######################################################
-    print(term_to_int_map)
     print("UNSATISFIABLE - THEORY")
     print('\n')
     print('UNSAT CORE')

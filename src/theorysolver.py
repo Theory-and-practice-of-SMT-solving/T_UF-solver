@@ -132,7 +132,6 @@ class TheorySolver:
         print('BUT THEY SHOULD BE DIFFERENT')
         print('\n')
         print("--------------------------------------------------------------------------------")
-        print(self.merge_history)
         #######################################################
 
         conflict = (u, v)
@@ -147,25 +146,36 @@ class TheorySolver:
     conflict_term = Expr(Symbol('not', True), conflict_term)
     
     unsat_core.append(conflict_term)
-    # searches for the first pair of terms that are equivalent to the conflicting terms. (PRECISO GARANTIR QUE O PAR ESTÁ NA CLAUSE INICIAL)
+    # searches for the first pair of terms that are equivalent to the conflicting terms.
     for (x, y, z) in self.merge_history:
       if z and self.find(x) == self.find(conflict[0]) and self.find(y) == self.find(conflict[0]):
         equality = Expr(Symbol('equal', True), x, y)
         unsat_core.append(equality)
-        print(x, y, z)
         justification = self.merge_history[(x, y, z)]
-        print(justification)
+
+        #######################################################
+        print(f'EQUALITY: {x}, {y}')
+        print(f'JUSTIFICATION: {justification}')
+        print('\n')
+        #######################################################
+        
         break
     
-    # # searches for the first pair of terms that are equivalent to the justification.
-    # while justification != None:
-    #   print(justification)
-    #   print('aqui, no lado direito da equação é uma igualdade derivada')
-    #   # backtrack through the merge history to identify contributing equations
-    #   unsat_core.append(justification)
-    #   justification = self.merge_history[justification]
+    # searches for the first pair of terms that are equivalent to the justification.
+    while justification != None:
+      for (x, y, z) in self.merge_history:
+        if z and self.find(x) == self.find(justification[0]) and self.find(y) == self.find(justification[0]):
+          equality = Expr(Symbol('equal', True), x, y)
+          unsat_core.append(equality)
+          justification = self.merge_history[(x, y, z)]
+          
+          #######################################################
+          print(f'EQUALITY: {x}, {y}')
+          print(f'JUSTIFICATION: {justification}')
+          print('\n')
+          #######################################################
 
-    # print(unsat_core)
+          break
     return unsat_core
   
   #######################################################
