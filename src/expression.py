@@ -143,3 +143,99 @@ class Expr:
         leaf_id = str(id(arg))
         tree.node(leaf_id, label=str(arg))
         tree.edge(node_id, leaf_id)
+
+################################################################ AUXILIARY FUNCTIONS
+
+# converting the formula given by pySMT parser to Expr
+def convert_to_expr(formula): 
+  if formula.is_symbol(): 
+    return Expr(Symbol(formula.symbol_name(), False))
+  
+  elif formula.is_function_application():
+    return Expr(Symbol(str(formula.function_name()), True), *[convert_to_expr(arg) for arg in formula.args()])
+  
+  elif formula.is_equals():
+    return Expr(Symbol('equal', True), convert_to_expr(formula.arg(0)), convert_to_expr(formula.arg(1)))
+  
+  elif formula.is_not(): 
+    return Expr(Symbol('not', True), convert_to_expr(formula.arg(0)))
+  
+  elif formula.is_and(): 
+    # making 'and' have only two arguments
+    args = [convert_to_expr(arg) for arg in formula.args()]
+    while len(args) > 2:
+      a = args.pop(0)
+      b = args.pop(0)
+      args.insert(0, Expr(Symbol('and', True), a, b))
+    return Expr(Symbol('and', True), *args)
+  
+  elif formula.is_or():
+    # making 'or' have only two arguments
+    args = [convert_to_expr(arg) for arg in formula.args()]
+    while len(args) > 2:
+        a = args.pop(0)
+        b = args.pop(0)
+        args.insert(0, Expr(Symbol('or', True), a, b))
+    return Expr(Symbol('or', True), *args)
+  
+  elif formula.is_implies(): 
+    return Expr(Symbol('implies', True), convert_to_expr(formula.arg(0)), convert_to_expr(formula.arg(1)))
+  
+  else:
+    raise ValueError(f"Error: {formula}")
+  
+def formula_preprocessing(formula):
+  formula_expr = convert_to_expr(formula)
+  formula_nnf = formula_expr.to_nnf()
+  formula_cnf = formula_nnf.to_cnf()
+
+  return formula_cnf
+
+def get_clause_set(formula_cnf):
+  clause_set = []
+
+  def get_clause(node):
+    if node.op.name == "or":
+      clause = []
+      for arg in node.args:
+        if arg.op.name == "or":
+          clause.extend(get_clause(arg))
+        else:
+          clause.append(arg)
+      return clause
+    else:
+      return [node]
+
+  def extract_clauses(node):
+    if node.op.name == "and":
+      for arg in node.args:
+        extract_clauses(arg)
+    else:
+      clause_set.append(get_clause(node))  
+
+  extract_clauses(formula_cnf)
+  return clause_set
+
+def create_abstraction(clause_set):
+  abstract_clause_set = []
+  term_to_int_map = {}
+  int_to_term_map = {}
+
+  for clause in clause_set:
+    converted_to_int = []
+    for term in clause:
+      if term in term_to_int_map:
+        converted_to_int.append(term_to_int_map[term])
+      elif term.op.name == "not" and term.args[0] in term_to_int_map:
+        converted_to_int.append(-1 * term_to_int_map[term.args[0]])
+      elif term.op.name == "not":
+        term_to_int_map[term.args[0]] = len(term_to_int_map) + 1
+        int_to_term_map[len(term_to_int_map)] = term.args[0]
+        converted_to_int.append(-1 * term_to_int_map[term.args[0]])
+      else:
+        term_to_int_map[term] = len(term_to_int_map) + 1
+        int_to_term_map[len(term_to_int_map)] = term
+        converted_to_int.append(term_to_int_map[term])
+    abstract_clause_set.append(converted_to_int)
+
+  return abstract_clause_set, term_to_int_map, int_to_term_map

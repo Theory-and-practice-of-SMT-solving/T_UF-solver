@@ -171,3 +171,50 @@ class TheorySolver:
     for i, _ in self.congruence_closure.items():
         print(f'VERTEX: {i} ----------> REPRESENTATIVE: {self.find(i)}')
   #######################################################
+
+################################################################ AUXILIARY FUNCTIONS
+
+def create_vertices(term, graph, congruence_closure, superterm):
+  label = term.op.name
+  graph[term] = (label, [args for args in term.args])
+
+  equivalence_class = congruence_closure[term][1]
+  if term not in equivalence_class:
+    equivalence_class.append(term)
+
+  predecessors = congruence_closure[term][2] 
+  if superterm is not None and superterm not in predecessors:
+    predecessors.add(superterm)
+
+  for arg in term.args:
+    create_vertices(arg, graph, congruence_closure, term)
+    
+def create_graphs(clause):
+  graph = defaultdict(tuple) # {v = (label, [sucessors])}
+  equal_pairs = list() # pares que sao equivalentes
+  constraints = list() # pares que nao podem ser equivalentes
+  congruence_closure = defaultdict(lambda: [0, [], set()]) # {v = (rank, [equivalence_class], [predecessors])}
+
+  for term in clause: 
+    if term.op.name == 'not': # verifica se o termo vai estar ou não no grafo de restrições
+      neg_arg = term.args[0] # not possui apenas 1 argumento
+        
+      if neg_arg.op.name == 'equal':
+        for arg in neg_arg.args:
+          create_vertices(arg, graph, congruence_closure, None)
+        
+        constraints.append([x for x in neg_arg.args])
+      else: # OLHAR
+        create_vertices(term.args[0], graph, congruence_closure, None)
+        constraints.append([term.args[0], term.args[0]])
+    else:
+      if term.op.name == "equal":
+        for arg in term.args:
+          create_vertices(arg, graph, congruence_closure, None)
+
+        equal_pairs.append([x for x in term.args])
+      else: # OLHAR
+        create_vertices(term, graph, congruence_closure, None)
+        equal_pairs.append([x for x in term.args])
+  
+  return graph, constraints, equal_pairs, congruence_closure
