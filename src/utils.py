@@ -1,6 +1,7 @@
 from theorysolver import *
 from pysmt.smtlib.parser import SmtLibParser
 from pysat.solvers import Solver
+import sys
 
 def run_sat_solver(abstract_clause_set, int_to_term_map):
   solver = Solver(name='g3')  # use the default SAT solver (glucose3 here)
@@ -11,38 +12,27 @@ def run_sat_solver(abstract_clause_set, int_to_term_map):
     sat_assignment = list()
     model = solver.get_model() # get a satisfying assignment (abstract)
 
-    #######################################################
-    print("SAT ABSTRACTION")
-    print(model) 
-    print('\n')
-    #######################################################
-
     for m in model: # get a satisfying assignment (terms)
       if m >= 0 :
         sat_assignment.append(int_to_term_map[m])
       else:
         sat_assignment.append(Expr(Symbol('not', True), int_to_term_map[(-1*m)]))
 
-    #######################################################
-    print("SAT ASSIGNMENT")
-    print(sat_assignment)
-    print('\n')
-    #######################################################
-
     solver.delete() # free resources
     return True, sat_assignment
 
-  else: # OLHAR
+  else:
 
     #######################################################
-    print("UNSATISFIABLE - SAT")
+    print('\n')
+    print("Unsat")
     print('\n')
     #######################################################
 
     solver.delete() # free resources
     return False, None
   
-def framework_CDCL(abstract_clause_set, term_to_int_map, int_to_term_map):
+def framework(abstract_clause_set, term_to_int_map, int_to_term_map):
 
   while True:
     is_sat_solver, sat_assignment = run_sat_solver(abstract_clause_set, int_to_term_map)
@@ -52,36 +42,27 @@ def framework_CDCL(abstract_clause_set, term_to_int_map, int_to_term_map):
 
     graph, constraints, equal_pairs, congruence_closure = create_graphs(sat_assignment)
 
-    #######################################################
-    print("EQUAL PAIRS")
-    print(equal_pairs)
-    print('\n')
-    print("DIFFERENT PAIRS")
-    print(constraints)
-    print('\n')
-    print("GRAPH")
-    for i in graph:
-      print(f'{i} ----------> SUCESSORS: {graph[i][1]} ----------> PREDECESSORS: {congruence_closure[i][2]}')
-    print('\n')
-    #######################################################
-
     ts = TheorySolver(graph, equal_pairs, constraints, congruence_closure)
     is_sat_theory_solver, unsat_core = ts.run_theory_solver()
 
     if is_sat_theory_solver:
-      
+       
       #######################################################
-      print("SATISFIABLE - THEORY")
       print('\n')
+      print("Sat") # PRINTAR MODELO TBM
+      print("\n")
       #######################################################
       
       return
 
+    # DELETAR DEPOIS
     #######################################################
-    print("UNSATISFIABLE - THEORY")
+    print("Unsat - Theory")
     print('\n')
     print('UNSAT CORE')
     print(unsat_core)
+    print('\n')
+    print("############################ FIM ITERAÇÃO ###########################")
     #######################################################
 
     new_abstract_clause = list()
@@ -93,17 +74,18 @@ def framework_CDCL(abstract_clause_set, term_to_int_map, int_to_term_map):
 
     abstract_clause_set.append(new_abstract_clause)
 
-    #######################################################
-    print([(-1)*x for x in new_abstract_clause])
-    print('\n')
-    print("NEW ABSTRACT CLAUSE SET")
-    print(abstract_clause_set)
-    print('\n')
-    #######################################################
-
 def run_parser(filename):
   parser = SmtLibParser() 
-  script = parser.get_script_fname(filename)
+
+  try:
+    script = parser.get_script_fname(filename)
+  except FileNotFoundError:
+    print(f"Error: The file '{filename}' was not found.")
+    sys.exit(1)
+  except Exception as e:
+    print(f"Error: Unable to parse the file.")
+    print(f"Description: {e}.")
+    sys.exit(1)
 
   formula = script.get_last_formula()
   formula_cnf = formula_preprocessing(formula)

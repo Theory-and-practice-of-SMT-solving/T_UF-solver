@@ -1,6 +1,8 @@
 # T_UF-solver
+
 A solver for the Theory of Uninterpreted Functions
 
-Group: 
+Group:
+
 - Sarah Azevedo Pereira
-- Wesley Marques Daniel Chaves 
+- Wesley Marques Daniel Chaves

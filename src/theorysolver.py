@@ -72,18 +72,7 @@ class TheorySolver:
   # merge the equivalence classes of u and v
   def merge(self, u, v, justification, is_original):
 
-    #######################################################
-    print(f'{u} AND {v} ARE EQUAL')
-    print('\n')
-    #######################################################
-
     if self.find(u) == self.find(v): 
-
-      #######################################################
-      print('THEY ALREADY BELONG TO THE SAME CLASS')
-      print('\n')
-      #######################################################
-      
       return
 
     predecessors_u = self.congruence_closure[u][2].copy()
@@ -93,11 +82,6 @@ class TheorySolver:
     # record the merge for backtracking
     self.merge_history[(u, v, is_original)] = justification
 
-    #######################################################
-    self.show()
-    print('\n')
-    #######################################################
-
     for x in predecessors_u:
       for y in predecessors_v:
         if self.find(x) != self.find(y) and self.congruent(x, y):
@@ -105,33 +89,20 @@ class TheorySolver:
 
   def run_theory_solver(self):
 
-    #######################################################
-    print("--------------------------------------------------------------------------------")
-    print('START - ALGORITHM')
-    print('\n')
-    self.show()
-    print('\n')
-    #######################################################
-
     # merge the equivalence classes of equal pairs
     for x, y in self.equal_pairs:
       self.merge(x, y, None, True)
-
-    #######################################################
-    print('END - ALGORITHM')
-    print('\n')
-    #######################################################
 
     # check if the final result is SAT under the set of constraints.
     for u, v in self.constraints:
       if self.find(u) == self.find(v):
 
+        # DELETAR DEPOIS
         #######################################################
-        print(f'{u} AND {v} ARE EQUAL')
         print('\n')
+        print(f'{u} AND {v} ARE EQUAL')
         print('BUT THEY SHOULD BE DIFFERENT')
         print('\n')
-        print("--------------------------------------------------------------------------------")
         #######################################################
 
         conflict = (u, v)
@@ -146,43 +117,40 @@ class TheorySolver:
     conflict_term = Expr(Symbol('not', True), conflict_term)
     
     unsat_core.append(conflict_term)
-    # searches for the first pair of terms that are equivalent to the conflicting terms.
-    for (x, y, z) in self.merge_history:
-      if z and self.find(x) == self.find(conflict[0]) and self.find(y) == self.find(conflict[0]):
-        equality = Expr(Symbol('equal', True), x, y)
-        unsat_core.append(equality)
-        justification = self.merge_history[(x, y, z)]
-
-        #######################################################
-        print(f'EQUALITY: {x}, {y}')
-        print(f'JUSTIFICATION: {justification}')
-        print('\n')
-        #######################################################
-        
-        break
-    
-    # searches for the first pair of terms that are equivalent to the justification.
-    while justification != None:
+    if self.merge_history:
+      # searches for the first pair of terms that are equivalent to the conflicting terms.
       for (x, y, z) in self.merge_history:
-        if z and self.find(x) == self.find(justification[0]) and self.find(y) == self.find(justification[0]):
+        if z and self.find(x) == self.find(conflict[0]) and self.find(y) == self.find(conflict[0]):
           equality = Expr(Symbol('equal', True), x, y)
           unsat_core.append(equality)
           justification = self.merge_history[(x, y, z)]
-          
+
+          # DELETAR DEPOIS
           #######################################################
-          print(f'EQUALITY: {x}, {y}')
+          print(f'EQUALITY ADDED TO UNSAT CORE: {x}, {y}')
           print(f'JUSTIFICATION: {justification}')
           print('\n')
           #######################################################
-
+          
           break
+
+      # searches for the first pair of terms that are equivalent to the justification.
+      while justification != None:
+        for (x, y, z) in self.merge_history:
+          if z and self.find(x) == self.find(justification[0]) and self.find(y) == self.find(justification[0]):
+            equality = Expr(Symbol('equal', True), x, y)
+            unsat_core.append(equality)
+            justification = self.merge_history[(x, y, z)]
+
+            # DELETAR DEPOIS
+            #######################################################
+            print(f'EQUALITY ADDED TO UNSAT CORE: {x}, {y}')
+            print(f'JUSTIFICATION: {justification}')
+            print('\n')
+            #######################################################
+
+            break
     return unsat_core
-  
-  #######################################################
-  def show(self):
-    for i, _ in self.congruence_closure.items():
-        print(f'VERTEX: {i} ----------> REPRESENTATIVE: {self.find(i)}')
-  #######################################################
 
 ################################################################ AUXILIARY FUNCTIONS
 
@@ -216,17 +184,15 @@ def create_graphs(clause):
           create_vertices(arg, graph, congruence_closure, None)
         
         constraints.append([x for x in neg_arg.args])
-      else: # OLHAR
+      else:
         create_vertices(term.args[0], graph, congruence_closure, None)
-        constraints.append([term.args[0], term.args[0]])
     else:
       if term.op.name == "equal":
         for arg in term.args:
           create_vertices(arg, graph, congruence_closure, None)
 
         equal_pairs.append([x for x in term.args])
-      else: # OLHAR
+      else:
         create_vertices(term, graph, congruence_closure, None)
-        equal_pairs.append([x for x in term.args])
   
   return graph, constraints, equal_pairs, congruence_closure

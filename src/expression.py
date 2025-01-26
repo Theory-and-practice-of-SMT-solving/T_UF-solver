@@ -1,6 +1,3 @@
-from graphviz import Digraph
-import os
-
 # defines a symbol, that can be a constant (is_function = False) or a function (is_function = True) 
 # example of Symbol -----> name = or, is_function = yes
 class Symbol:
@@ -120,29 +117,6 @@ class Expr:
     
   def __repr__(self):
     return self.__str__() 
-  
-  # creating a graphical tree
-  def to_tree(self, filename):
-    tree = Digraph()
-    self.add_to_tree(tree, self)
-
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    filepath = os.path.join(current_dir, f'images/{filename}')
-    tree.render(filepath, format="png", cleanup=True)
-
-  def add_to_tree(self, tree, node, parent_id=None):
-    node_id = str(id(node))
-    tree.node(node_id, label=node.op.name)
-    if parent_id:
-      tree.edge(parent_id, node_id)
-
-    for arg in node.args:
-      if isinstance(arg, Expr):
-        self.add_to_tree(tree, arg, node_id)
-      else:
-        leaf_id = str(id(arg))
-        tree.node(leaf_id, label=str(arg))
-        tree.edge(node_id, leaf_id)
 
 ################################################################ AUXILIARY FUNCTIONS
 
@@ -181,11 +155,26 @@ def convert_to_expr(formula):
   elif formula.is_implies(): 
     return Expr(Symbol('implies', True), convert_to_expr(formula.arg(0)), convert_to_expr(formula.arg(1)))
   
+  elif formula.is_iff():
+    left = convert_to_expr(formula.arg(0))  
+    right = convert_to_expr(formula.arg(1)) 
+    # a <=> b = (a => b) and (b => a)
+    return Expr(Symbol('and', True), Expr(Symbol('implies', True), left, right), Expr(Symbol('implies', True), right, left))
+  
+  if formula.is_ite():
+    condition = convert_to_expr(formula.arg(0))
+    true_expr = convert_to_expr(formula.arg(1))
+    false_expr = convert_to_expr(formula.arg(2))
+
+    neg_condition = Expr(Symbol('not', True), condition)
+    return Expr(Symbol('or', True), Expr(Symbol('and', True), condition, true_expr), Expr(Symbol('and', True), neg_condition, false_expr))
+  
   else:
-    raise ValueError(f"Error: {formula}")
+    raise ValueError(f"Error: {formula} and {type(formula)}")
   
 def formula_preprocessing(formula):
   formula_expr = convert_to_expr(formula)
+
   formula_nnf = formula_expr.to_nnf()
   formula_cnf = formula_nnf.to_cnf()
 
