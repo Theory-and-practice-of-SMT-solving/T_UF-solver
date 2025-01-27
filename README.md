@@ -13,28 +13,37 @@ Group:
 
    - Windows:
 
+     ```bash
      python -m venv name-venv
      name-venv\Scripts\activate
+     ```
 
    - Linux/Mac:
-
+     ```bash
      python3 -m venv name-venv
      source name-venv/bin/activate
+     ```
 
 2. Install the project dependencies listed in the `requirements.txt` file:
 
+   ```bash
    pip install -r requirements.txt
+   ```
 
 3. Run the project:
 
+   ```bash
    python src/main.py filename
+   ```
 
 4. Deactivate the virtual environment when finished:
-
+   ```bash
    deactivate
+   ```
 
 ## Structure
 
+```plaintext
 project/
 │
 ├── src/
@@ -45,3 +54,4 @@ project/
 │
 ├── requirements.txt
 └── README.md
+```
