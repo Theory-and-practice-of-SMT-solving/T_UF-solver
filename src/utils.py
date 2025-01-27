@@ -30,6 +30,11 @@ def run_sat_solver(abstract_clause_set, int_to_term_map):
     solver.delete() # free resources
     return False, None
   
+# framework function to iteratively solve using the SAT solver and theory solver
+# The process involves:
+# 1. Running the SAT solver to check if the formula is satisfiable (sat)
+# 2. If satisfiable, the formula is passed to the theory solver.
+# 3. If the theory solver finds it unsatisfiable, it adds the unsat core and the process repeats.
 def framework(abstract_clause_set, term_to_int_map, int_to_term_map):
 
   while True:
