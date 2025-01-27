@@ -1,5 +1,2 @@
-# execute pip install -r requirements.txt para instalar as dependências
-
 PySMT==0.9.6
 python-sat==1.8.dev14
-six==1.17.0

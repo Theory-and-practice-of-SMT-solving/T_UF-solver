@@ -170,7 +170,7 @@ def convert_to_expr(formula):
     return Expr(Symbol('or', True), Expr(Symbol('and', True), condition, true_expr), Expr(Symbol('and', True), neg_condition, false_expr))
   
   else:
-    raise ValueError(f"Error: {formula} and {type(formula)}")
+    raise ValueError(f"Error: {formula}")
   
 def formula_preprocessing(formula):
   formula_expr = convert_to_expr(formula)

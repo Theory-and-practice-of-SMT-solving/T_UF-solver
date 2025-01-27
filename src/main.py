@@ -1,5 +1,6 @@
 from utils import *
 import sys
+import os
 
 def main():
 
@@ -9,6 +10,9 @@ def main():
     sys.exit(1)
   else:
     filename = sys.argv[1]
+
+    # get the absolute path of the file
+    filename = os.path.abspath(filename)
 
   formula_cnf = run_parser(filename)
   clause_set = get_clause_set(formula_cnf)
