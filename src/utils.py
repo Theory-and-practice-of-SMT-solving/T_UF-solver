@@ -4,7 +4,9 @@ from pysat.solvers import Solver
 import sys
 
 def run_sat_solver(abstract_clause_set, int_to_term_map):
-  solver = Solver(name='g3')  # use the default SAT solver (glucose3 here)
+  solver = Solver(name='g3') # use the default SAT solver (glucose3 here)
+
+  # add the abstract clauses to the sat solver
   for abstract_clause in abstract_clause_set:
     solver.add_clause(abstract_clause)
 
@@ -23,11 +25,7 @@ def run_sat_solver(abstract_clause_set, int_to_term_map):
 
   else:
 
-    #######################################################
-    print('\n')
     print("Unsat")
-    print('\n')
-    #######################################################
 
     solver.delete() # free resources
     return False, None
@@ -35,36 +33,24 @@ def run_sat_solver(abstract_clause_set, int_to_term_map):
 def framework(abstract_clause_set, term_to_int_map, int_to_term_map):
 
   while True:
+    # get a sat assignment from the sat solver
     is_sat_solver, sat_assignment = run_sat_solver(abstract_clause_set, int_to_term_map)
 
     if not is_sat_solver:
       return
 
+    # compute the congruence closure and return sat or unsat at the theory level
     graph, constraints, equal_pairs, congruence_closure = create_graphs(sat_assignment)
-
     ts = TheorySolver(graph, equal_pairs, constraints, congruence_closure)
     is_sat_theory_solver, unsat_core = ts.run_theory_solver()
 
     if is_sat_theory_solver:
-       
-      #######################################################
-      print('\n')
-      print("Sat") # PRINTAR MODELO TBM
-      print("\n")
-      #######################################################
-      
+  
+      print("Sat")
+
       return
 
-    # DELETAR DEPOIS
-    #######################################################
-    print("Unsat - Theory")
-    print('\n')
-    print('UNSAT CORE')
-    print(unsat_core)
-    print('\n')
-    print("############################ FIM ITERAÇÃO ###########################")
-    #######################################################
-
+    # create the new abstract clause using the unsat core
     new_abstract_clause = list()
     for i in unsat_core:
       if i.op.name == 'not':
@@ -74,6 +60,7 @@ def framework(abstract_clause_set, term_to_int_map, int_to_term_map):
 
     abstract_clause_set.append(new_abstract_clause)
 
+# parses the file and retrieves the full formula
 def run_parser(filename):
   parser = SmtLibParser() 
 

@@ -5,8 +5,8 @@ class TheorySolver:
   def __init__(self, graph, equal_pairs, constraints, congruence_closure):
     self.graph = graph  # {v = (label, [sucessors])}
     self.representatives = {v: v for v in graph}
-    self.equal_pairs = equal_pairs # pares que sao equivalentes
-    self.constraints = constraints # pares que nao podem ser equivalentes
+    self.equal_pairs = equal_pairs # equal pairs
+    self.constraints = constraints # pairs that must be different
     self.congruence_closure = congruence_closure # {v = [rank, [equivalence_class], [predecessors]]}
     self.merge_history = defaultdict(tuple) # to track the history of merges for conflict tracing [(equality): (justification)]
   
@@ -88,7 +88,6 @@ class TheorySolver:
           self.merge(x, y, (u, v), False)
 
   def run_theory_solver(self):
-
     # merge the equivalence classes of equal pairs
     for x, y in self.equal_pairs:
       self.merge(x, y, None, True)
@@ -96,23 +95,16 @@ class TheorySolver:
     # check if the final result is SAT under the set of constraints.
     for u, v in self.constraints:
       if self.find(u) == self.find(v):
-
-        # DELETAR DEPOIS
-        #######################################################
-        print('\n')
-        print(f'{u} AND {v} ARE EQUAL')
-        print('BUT THEY SHOULD BE DIFFERENT')
-        print('\n')
-        #######################################################
-
         conflict = (u, v)
         unsat_core = self.trace_unsat_core(conflict)
         return False, unsat_core
       
     return True, None
 
+  # creates the unsat core
   def trace_unsat_core(self, conflict):
     unsat_core = list()
+    # add the pairs that lead to conflict into the unsat core
     conflict_term = Expr(Symbol('equal', True), conflict[0], conflict[1])
     conflict_term = Expr(Symbol('not', True), conflict_term)
     
@@ -124,13 +116,6 @@ class TheorySolver:
           equality = Expr(Symbol('equal', True), x, y)
           unsat_core.append(equality)
           justification = self.merge_history[(x, y, z)]
-
-          # DELETAR DEPOIS
-          #######################################################
-          print(f'EQUALITY ADDED TO UNSAT CORE: {x}, {y}')
-          print(f'JUSTIFICATION: {justification}')
-          print('\n')
-          #######################################################
           
           break
 
@@ -142,18 +127,14 @@ class TheorySolver:
             unsat_core.append(equality)
             justification = self.merge_history[(x, y, z)]
 
-            # DELETAR DEPOIS
-            #######################################################
-            print(f'EQUALITY ADDED TO UNSAT CORE: {x}, {y}')
-            print(f'JUSTIFICATION: {justification}')
-            print('\n')
-            #######################################################
-
             break
     return unsat_core
 
 ################################################################ AUXILIARY FUNCTIONS
 
+# creates a vertex for each symbol in the formula, together with their successor symbols and predecessor symbols
+# if f(b), f and b are symbols, b is a successor of f and f(b) is a predecessor of b
+# it also creates the equivalence classes, in which each symbol is its own representative
 def create_vertices(term, graph, congruence_closure, superterm):
   label = term.op.name
   graph[term] = (label, [args for args in term.args])
@@ -162,22 +143,23 @@ def create_vertices(term, graph, congruence_closure, superterm):
   if term not in equivalence_class:
     equivalence_class.append(term)
 
-  predecessors = congruence_closure[term][2] 
+  predecessors = congruence_closure[term][2]
   if superterm is not None and superterm not in predecessors:
     predecessors.add(superterm)
 
   for arg in term.args:
     create_vertices(arg, graph, congruence_closure, term)
-    
+
+# creates the constraint graph (including "not" terms) and the graph for applying the congruence closure algorithm
 def create_graphs(clause):
   graph = defaultdict(tuple) # {v = (label, [sucessors])}
-  equal_pairs = list() # pares que sao equivalentes
-  constraints = list() # pares que nao podem ser equivalentes
+  equal_pairs = list() # equal pairs
+  constraints = list() # pairs that must be different
   congruence_closure = defaultdict(lambda: [0, [], set()]) # {v = (rank, [equivalence_class], [predecessors])}
 
   for term in clause: 
-    if term.op.name == 'not': # verifica se o termo vai estar ou não no grafo de restrições
-      neg_arg = term.args[0] # not possui apenas 1 argumento
+    if term.op.name == 'not': # it belongs to the contraints graph
+      neg_arg = term.args[0]
         
       if neg_arg.op.name == 'equal':
         for arg in neg_arg.args:

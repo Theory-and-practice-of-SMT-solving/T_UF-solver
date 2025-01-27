@@ -172,6 +172,7 @@ def convert_to_expr(formula):
   else:
     raise ValueError(f"Error: {formula}")
   
+# preprocesses a logical formula by converting it to CNF
 def formula_preprocessing(formula):
   formula_expr = convert_to_expr(formula)
 
@@ -180,6 +181,7 @@ def formula_preprocessing(formula):
 
   return formula_cnf
 
+# extracts the set of clauses from a CNF formula
 def get_clause_set(formula_cnf):
   clause_set = []
 
@@ -205,6 +207,7 @@ def get_clause_set(formula_cnf):
   extract_clauses(formula_cnf)
   return clause_set
 
+# creates an abstraction by converting terms in the clause set to integers
 def create_abstraction(clause_set):
   abstract_clause_set = []
   term_to_int_map = {}
@@ -225,6 +228,7 @@ def create_abstraction(clause_set):
         term_to_int_map[term] = len(term_to_int_map) + 1
         int_to_term_map[len(term_to_int_map)] = term
         converted_to_int.append(term_to_int_map[term])
+        
     abstract_clause_set.append(converted_to_int)
 
   return abstract_clause_set, term_to_int_map, int_to_term_map

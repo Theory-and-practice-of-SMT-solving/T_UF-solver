@@ -19,6 +19,7 @@ Group:
      ```
 
    - Linux/Mac:
+
      ```bash
      python3 -m venv name-venv
      source name-venv/bin/activate
@@ -37,6 +38,7 @@ Group:
    ```
 
 4. Deactivate the virtual environment when finished:
+
    ```bash
    deactivate
    ```
