@@ -7,7 +7,7 @@ Group:
 - Sarah Azevedo Pereira
 - Wesley Marques Daniel Chaves
 
-# Instructions
+## Instructions
 
 1. Create and activate a virtual environment to ensure the project's dependencies are isolated:
 
